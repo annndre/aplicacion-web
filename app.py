@@ -22,7 +22,7 @@ def obtener_conexion():
         host=os.getenv("DB_HOST", "dpg-cv8rv652ng1s73bd3ee0-a.oregon-postgres.render.com"),
         database=os.getenv("DB_NAME", "inventario_db_gg37"),
         user=os.getenv("DB_USER", "inventario_db_gg37_user"),
-        password=os.getenv("DB_PASSWORD", "tr1cmIiptMke93DgahbXMJ8BpAOdp133"),  # 💡 Cambiar a variables de entorno para más seguridad
+        password=os.getenv("DB_PASSWORD"),  # 💡 Cambiar a variables de entorno para más seguridad
         port=5432,
         cursor_factory=psycopg2.extras.DictCursor
     )
@@ -490,4 +490,5 @@ def logout():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 10000))  # Toma el puerto de la variable de entorno
+    app.run(host="0.0.0.0", port=port)
