@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+
+{% block title %}Distribución de Productos{% endblock %}
+
+{% block content %}
+<div class="contenedor">
+    <h2>📝 Registrar Distribución de Productos</h2>
+
+    <!-- Sección para ingresar productos manualmente -->
+    <h3>📦 Ingresar productos</h3>
+    <table id="tabla-productos">
+        <thead>
+            <tr>
+                <th>Producto</th>
+                <th>Stock Disponible</th>
+                <th>Cantidad a Distribuir</th>
+                <th>Acción</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+    <button id="agregar-producto">➕ Agregar Producto</button>
+
+    <hr>
+
+    <!-- Información de la Guía de Despacho -->
+    <h3>📜 Información de la Guía</h3>
+    <label for="numero_guia">Número de Guía de Despacho:</label>
+    <input type="text" id="numero_guia" required>
+
+    <label for="destino">Destino:</label>
+    <input type="text" id="destino" required>
+
+    <hr>
+
+    <!-- Botón para guardar en PostgreSQL -->
+    <button id="guardar-en-postgres">💾 Guardar en PostgreSQL</button>
+</div>
+
+<!-- Script para manejar productos y conexión con PostgreSQL -->
+<script>
+    // Agregar manualmente un producto a la tabla
+    document.getElementById("agregar-producto").addEventListener("click", function() {
+        let table = document.getElementById("tabla-productos").querySelector("tbody");
+        let row = table.insertRow();
+        row.innerHTML = `
+            <td>
+                <input type="text" class="producto-nombre" oninput="filtrarProductos(this)">
+                <select class="producto-lista" onchange="seleccionarProducto(this)">
+                    <option value="">Seleccione un producto</option>
+                    {% for producto in inventario %}
+                    <option value="{{ producto.id }}" data-nombre="{{ producto.producto_nombre }}" data-stock="{{ producto.stock_disponible }}">
+                        {{ producto.producto_nombre }} (Stock: {{ producto.stock_disponible }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td class="stock-disponible">-</td>
+            <td><input type="number" class="producto-cantidad" min="1"></td>
+            <td><button type="button" class="eliminar-fila">❌</button></td>
+        `;
+    });
+
+    // Eliminar fila de la tabla
+    document.getElementById("tabla-productos").addEventListener("click", function(event) {
+        if (event.target.classList.contains("eliminar-fila")) {
+            event.target.closest("tr").remove();
+        }
+    });
+
+    // Guardar distribución en PostgreSQL
+    document.getElementById("guardar-en-postgres").addEventListener("click", function() {
+        let productos = [];
+        let error = false;
+
+        document.querySelectorAll("#tabla-productos tbody tr").forEach(row => {
+            let nombre = row.querySelector(".producto-nombre").value.trim();
+            let cantidad = parseInt(row.querySelector(".producto-cantidad").value);
+            let stockDisponible = parseInt(row.querySelector(".stock-disponible").textContent);
+
+            if (!nombre || isNaN(cantidad) || cantidad <= 0) {
+                alert("❌ Debes ingresar un producto válido con una cantidad mayor a 0.");
+                error = true;
+                return;
+            }
+
+            if (stockDisponible >= 0 && cantidad > stockDisponible) {
+                alert(`⚠️ La cantidad ingresada para "${nombre}" excede el stock disponible (${stockDisponible}).`);
+                error = true;
+                return;
+            }
+
+            productos.push({ nombre: nombre, cantidad: cantidad });
+        });
+
+        if (error) return;
+
+        let numero_guia = document.getElementById("numero_guia").value.trim();
+        let destino = document.getElementById("destino").value.trim();
+
+        if (!numero_guia || !destino) {
+            alert("❌ Debes completar todos los campos obligatorios.");
+            return;
+        }
+
+        fetch("/guardar_distribucion", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productos: productos, numero_guia: numero_guia, destino: destino })
+        }).then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert("✅ Distribución guardada en PostgreSQL exitosamente.");
+                location.reload();
+            } else {
+                alert("Error al guardar en PostgreSQL.");
+            }
+        });
+    });
+
+    // Filtrar productos en la lista desplegable a medida que el usuario escribe
+    function filtrarProductos(input) {
+        let select = input.closest("td").querySelector(".producto-lista");
+        let filtro = input.value.toLowerCase();
+        let opciones = select.options;
+
+        for (let i = 0; i < opciones.length; i++) {
+            let nombreProducto = opciones[i].getAttribute("data-nombre") || "";
+            opciones[i].style.display = nombreProducto.toLowerCase().includes(filtro) ? "" : "none";
+        }
+    }
+
+    // Seleccionar producto de la lista desplegable y mostrar su cantidad disponible
+    function seleccionarProducto(select) {
+        let input = select.closest("td").querySelector(".producto-nombre");
+        let stockTd = select.closest("tr").querySelector(".stock-disponible");
+        let cantidadDisponible = select.options[select.selectedIndex].getAttribute("data-stock") || "-";
+
+        input.value = select.options[select.selectedIndex].getAttribute("data-nombre");
+        stockTd.textContent = cantidadDisponible;
+    }
+</script>
+{% endblock %}

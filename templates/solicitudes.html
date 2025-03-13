@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+
+{% block title %}Registrar Solicitud{% endblock %}
+
+{% block content %}
+<div class="contenedor-flex">
+    <div class="formulario">
+        <h2>📝 Registrar Solicitud</h2>
+
+        <form method="POST">
+            <label>👤 Nombre del Solicitante:</label>
+            <input type="text" name="nombre_solicitante" required value="{{ datos.get('nombre_solicitante', '') }}">
+
+            <label>🆔 RUT (sin puntos, con guión):</label>
+            <input type="text" name="rut_solicitante" pattern="^\d{7,8}-[\dkK]$" required value="{{ datos.get('rut_solicitante', '') }}">
+
+            <!-- Campo de búsqueda para filtrar productos -->
+            <label>🔎 Buscar Producto:</label>
+            <input type="text" id="producto_nombre" placeholder="Escribe el nombre del producto" oninput="filtrarProductos()" required>
+
+            <!-- Lista desplegable de productos con stock disponible -->
+            <label>📦 Seleccionar Producto:</label>
+            <select name="producto_id" id="producto_id" required onchange="actualizarStockDisponible()">
+                <option value="">Seleccione un producto</option>
+                {% for producto in inventario %}
+                    <option value="{{ producto.id }}" data-nombre="{{ producto.producto_nombre }}" data-stock="{{ producto.stock_disponible }}">
+                         {{ producto.producto_nombre }} (Stock: {{ producto.stock_disponible }})
+                    </option>
+                {% endfor %}
+            </select>
+
+            <label>📊 Stock Disponible:</label>
+            <input type="text" id="stock_disponible" disabled>
+
+            <label>📊 Cantidad:</label>
+            <input type="number" name="cantidad" id="cantidad" min="1" required>
+
+            <label>🏢 Centro de Costo:</label>
+            <select name="centro_costo" required>
+                <option value="40">40 - Mejoramiento Sanitario</option>
+                <option value="42">42 - Cinta de Lodos</option>
+                <option value="48">48 - Viña Sorepa</option>
+            </select>
+
+            <button type="submit">➕ Agregar Producto</button>
+        </form>
+    </div>
+
+    <div class="lista-solicitudes">
+        <h3>📋 Productos Agregados</h3>
+        <ul class="productos-lista">
+            {% for item in datos.get('productos', []) %}
+                <li>
+                    {{ item.producto_nombre }} - {{ item.cantidad }} unidades (Centro de Costo: {{ item.centro_costo }})
+                    <a href="{{ url_for('eliminar_producto', index=loop.index0) }}" class="btn-eliminar">❌ Eliminar</a>
+                </li>
+            {% endfor %}
+        </ul>
+
+        {% if datos.get('productos') %}
+            <form method="GET" action="{{ url_for('confirmar_solicitud') }}">
+                <button type="submit">✅ Confirmar Solicitud</button>
+            </form>
+        {% endif %}
+
+        <h3>⚠️ Historial de Alertas</h3>
+        <ul class="alertas">
+            {% with messages = get_flashed_messages() %}
+                {% for message in messages %}
+                    <li class="alert {{ 'alert-grave' if '⚠️' in message else '' }}">{{ message }}</li>
+                {% endfor %}
+            {% endwith %}
+        </ul>
+    </div>
+</div>
+
+<!-- Estilos CSS -->
+<style>
+.contenedor-flex {
+    display: flex;
+    gap: 20px;
+}
+.formulario, .lista-solicitudes {
+    width: 50%;
+    background-color: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+.productos-lista li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.btn-eliminar {
+    background-color: #ff4d4d;
+    color: white;
+    padding: 5px;
+    text-decoration: none;
+    border-radius: 5px;
+}
+.alertas .alert {
+    background-color: #f10b0b;
+    border: 1px solid #fd8f8f;
+    padding: 8px;
+    margin: 5px 0;
+    border-radius: 5px;
+}
+.alert-grave {
+    background-color: #ff4d4d;
+    color: rgb(0, 0, 0);
+    font-weight: bold;
+    border: 2px solid #d10000;
+    box-shadow: 0 0 15px rgba(255, 0, 0, 0.7);
+    text-align: center;
+    margin-top: 20px;
+    padding: 20px;
+    font-size: 18px;
+}
+</style>
+
+<!-- Script para filtrar productos y verificar stock -->
+<script>
+function filtrarProductos() {
+    const input = document.getElementById('producto_nombre').value.toLowerCase();
+    const select = document.getElementById('producto_id');
+    const opciones = select.options;
+
+    for (let i = 0; i < opciones.length; i++) {
+        const nombreProducto = opciones[i].getAttribute('data-nombre') || '';
+        opciones[i].style.display = nombreProducto.toLowerCase().includes(input) || opciones[i].value === '' ? "" : "none";
+    }
+
+    // Si solo hay una coincidencia visible, seleccionarla automáticamente
+    const visibles = [...opciones].filter(option => option.style.display === '');
+    if (visibles.length === 2) {  // incluye "Seleccione un producto"
+        select.value = visibles[1].value;
+    } else {
+        select.value = '';
+    }
+}
+
+// Mostrar stock disponible cuando se seleccione un producto
+function actualizarStockDisponible() {
+    let selectedOption = document.getElementById("producto_id").options[document.getElementById("producto_id").selectedIndex];
+    let stockDisponible = selectedOption.getAttribute("data-stock") || "0";
+    document.getElementById("stock_disponible").value = stockDisponible;
+    document.getElementById("cantidad").setAttribute("max", stockDisponible);
+}
+</script>
+
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block title %}Inventario{% endblock %}
+
+{% block content %}
+<h2>📦 Inventario de Productos</h2>
+
+<div style="margin-bottom: 15px;">
+    <label for="buscarProducto">🔎 Buscar Producto:</label>
+    <input type="text" id="buscarProducto" placeholder="Ingrese nombre del producto..." oninput="filtrarProductos()">
+
+    <label for="stockDisponible">📊 Stock Disponible:</label>
+    <input type="text" id="stockDisponible" readonly>
+</div>
+
+<table border="1" width="100%">
+    <thead>
+        <tr>
+            <th>ID Producto</th>
+            <th>Descripción/Nombre</th>
+            <th>Stock Disponible</th>  <!-- 🔹 Modificado: "cantidad" → "stock_disponible" -->
+            <th>Stock Crítico</th>
+            {% if inventario and inventario[0] is defined and 'solicitudes' in inventario[0] %}
+                <th>Cantidad Solicitudes</th>
+            {% endif %}
+        </tr>
+    </thead>
+    <tbody id="tablaInventario">
+        {% for producto in inventario %}
+        <tr>
+            <td>{{ producto.id }}</td>
+            <td>{{ producto.producto_nombre }}</td> <!-- 🔹 Modificado: "nombre" → "producto_nombre" -->
+            <td>{{ producto.stock_disponible }}</td> <!-- 🔹 Modificado: "cantidad" → "stock_disponible" -->
+            <td>{{ producto.stock_critico }}</td>
+            {% if 'solicitudes' in producto %}
+                <td>{{ producto.solicitudes }}</td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<script>
+    function filtrarProductos() {
+        const filtro = document.getElementById('buscarProducto').value.toLowerCase();
+        const filas = document.querySelectorAll("#tablaInventario tr");
+        let stockDisponible = "";
+
+        filas.forEach(fila => {
+            const nombreProducto = fila.cells[1].innerText.toLowerCase();
+
+            if (nombreProducto.includes(filtro)) {
+                fila.style.display = "";
+                stockDisponible = fila.cells[2].innerText;  // 🔹 Modificado: Ahora usa "stock_disponible"
+            } else {
+                fila.style.display = "none";
+            }
+        });
+
+        document.getElementById('stockDisponible').value = stockDisponible;
+    }
+</script>
+
+{% endblock %}
