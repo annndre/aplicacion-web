@@ -31,10 +31,10 @@ def obtener_conexion():
 @app.route('/', methods=['GET', 'POST'])
 def login():
     usuarios = {
-        "admin": "1234",
-        "usuario1": "abcd",
-        "usuario2": "efgh",
-        "usuario3": "ijkl"
+        "Gonzalo": "ADMINJCM",
+        "Mauricio": "MAURICIOJCM",
+        "Mariela": "MARIELAJCM",
+        "Nicolas": "NICOLASJCM"
     }
 
     if request.method == 'POST':
@@ -272,75 +272,132 @@ def entradas():
     if 'usuario' not in session:
         return redirect(url_for('login'))
 
+    # Obtener inventario
     conexion = obtener_conexion()
     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
         cursor.execute("SELECT id, producto_nombre, stock_disponible, unidad, categoria FROM productos")
         inventario = cursor.fetchall()
 
+    # Inicializar datos temporales en la sesión
+    if 'entrada_temporal' not in session:
+        session['entrada_temporal'] = {
+            'productos': [],
+            'numero_orden': '',
+            'numero_guia': '',
+            'numero_factura': ''
+        }
+
     if request.method == 'POST':
-        usuario = session['usuario']  # Guardar quién hizo la entrada
-        producto_nombre = request.form.get('producto_nombre', '').strip()
-        cantidad = int(request.form.get('cantidad', 0))
-        categoria = request.form.get('categoria', 'General').strip()  # Nueva categoría agregada
-        unidad = request.form.get('unidad', '')
-        stock_critico = int(request.form.get('stock_critico', 0))
-        numero_orden = request.form.get('numero_orden', '')
-        numero_guia = request.form.get('numero_guia', '')
-        numero_factura = request.form.get('numero_factura', '')
+        if 'agregar_producto' in request.form:
+            # Guardar los datos de la orden en la sesión
+            session['entrada_temporal']['numero_orden'] = request.form.get('numero_orden', '').strip()
+            session['entrada_temporal']['numero_guia'] = request.form.get('numero_guia', '').strip()
+            session['entrada_temporal']['numero_factura'] = request.form.get('numero_factura', '').strip()
 
-        with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-            # Buscar si el producto ya existe en la base de datos
-            cursor.execute("SELECT id, stock_disponible, categoria FROM productos WHERE producto_nombre = %(nombre)s", {'nombre': producto_nombre})
-            producto = cursor.fetchone()
+            # Capturar datos del producto
+            producto_nombre = request.form.get('producto_nombre', '').strip()
+            cantidad = int(request.form.get('cantidad', 0))
+            unidad = request.form.get('unidad', '').strip()
+            categoria = request.form.get('categoria', 'General').strip()
 
-            if producto:
-                # Si el producto ya existe, actualizar su stock pero NO cambiar su categoría
-                nuevo_stock = producto['stock_disponible'] + cantidad
-                cursor.execute("""
-                    UPDATE productos 
-                    SET stock_disponible = %(stock_disponible)s 
-                    WHERE id = %(id)s
-                """, {'stock_disponible': nuevo_stock, 'id': producto['id']})
-                producto_id = producto['id']
-                categoria = producto['categoria']  # Mantener la categoría del producto existente
-            else:
-                # Si el producto no existe, insertarlo en la base de datos con la categoría seleccionada
-                cursor.execute("""
-                    INSERT INTO productos (producto_nombre, unidad, stock_disponible, stock_critico, categoria) 
-                    VALUES (%(nombre)s, %(unidad)s, %(stock_disponible)s, %(stock_critico)s, %(categoria)s) 
-                    RETURNING id
-                """, {
-                    'nombre': producto_nombre,
+            if not producto_nombre or cantidad <= 0:
+                flash('⚠️ Error: Debes ingresar un nombre de producto y cantidad válida.', 'error')
+                return redirect(url_for('entradas'))
+
+            # Verificar si el producto ya existe en la base de datos
+            with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                cursor.execute("SELECT id, stock_disponible FROM productos WHERE LOWER(TRIM(producto_nombre)) = LOWER(TRIM(%s))", (producto_nombre,))
+                producto_existente = cursor.fetchone()
+
+            if producto_existente:
+                # Si el producto ya existe, solo actualizar su stock
+                session['entrada_temporal']['productos'].append({
+                    'producto_id': producto_existente['id'],
+                    'producto_nombre': producto_nombre,
+                    'cantidad': cantidad,
                     'unidad': unidad,
-                    'stock_disponible': cantidad,
-                    'stock_critico': stock_critico,
-                    'categoria': categoria
+                    'categoria': categoria,
+                    'nuevo': False  # Indica que es un producto ya existente
                 })
-                producto_id = cursor.fetchone()['id']  # Obtener el ID del producto insertado
+            else:
+                # Producto nuevo, agregarlo a la lista con marca de nuevo
+                session['entrada_temporal']['productos'].append({
+                    'producto_id': None,  # Se asignará cuando se inserte en la BD
+                    'producto_nombre': producto_nombre,
+                    'cantidad': cantidad,
+                    'unidad': unidad,
+                    'categoria': categoria,
+                    'nuevo': True  # Indica que es un nuevo producto
+                })
 
-            # Registrar la entrada en el historial de entradas
-            cursor.execute("""
-                INSERT INTO historial_entradas 
-                (numero_orden, numero_guia, numero_factura, producto_id, producto_nombre, cantidad, unidad, categoria, usuario) 
-                VALUES (%(numero_orden)s, %(numero_guia)s, %(numero_factura)s, %(producto_id)s, %(producto_nombre)s, %(cantidad)s, %(unidad)s, %(categoria)s, %(usuario)s)
-            """, {
-                'numero_orden': numero_orden,
-                'numero_guia': numero_guia,
-                'numero_factura': numero_factura,
-                'producto_id': producto_id,
-                'producto_nombre': producto_nombre,
-                'cantidad': cantidad,
-                'unidad': unidad,
-                'categoria': categoria,
-                'usuario': usuario
-            })
+            session.modified = True
+            flash(f'✅ Producto agregado: {producto_nombre} - Cantidad: {cantidad}', 'success')
+            return redirect(url_for('entradas'))
 
-            flash(f'✅ Entrada registrada por {usuario}: {producto_nombre} - Cantidad: {cantidad} - Categoría: {categoria}')
-            conexion.commit()
+        elif 'eliminar_producto' in request.form:
+            # Eliminar un producto de la lista temporal
+            index = int(request.form.get('eliminar_producto'))
+            if 0 <= index < len(session['entrada_temporal']['productos']):
+                eliminado = session['entrada_temporal']['productos'].pop(index)
+                session.modified = True
+                flash(f'🗑 Producto eliminado: {eliminado["producto_nombre"]}', 'warning')
+            return redirect(url_for('entradas'))
 
-        return redirect(url_for('entradas'))
+        elif 'confirmar_entrada' in request.form:
+            usuario = session['usuario']
+            numero_orden = session['entrada_temporal']['numero_orden']
+            numero_guia = session['entrada_temporal']['numero_guia']
+            numero_factura = session['entrada_temporal']['numero_factura']
 
-    return render_template('entradas.html', inventario=inventario)
+            if not session['entrada_temporal']['productos']:
+                flash('⚠️ Error: No hay productos para registrar.', 'error')
+                return redirect(url_for('entradas'))
+
+            with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                for producto in session['entrada_temporal']['productos']:
+                    producto_nombre = producto['producto_nombre']
+                    cantidad = producto['cantidad']
+                    unidad = producto['unidad']
+                    categoria = producto['categoria']
+
+                    if producto['nuevo']:
+                        # Insertar nuevo producto
+                        cursor.execute("""
+                            INSERT INTO productos (producto_nombre, unidad, stock_disponible, categoria) 
+                            VALUES (%s, %s, %s, %s) RETURNING id
+                        """, (producto_nombre, unidad, cantidad, categoria))
+                        producto_id = cursor.fetchone()['id']
+                    else:
+                        # Si el producto ya existe, actualizar stock
+                        cursor.execute("UPDATE productos SET stock_disponible = stock_disponible + %s WHERE id = %s", (cantidad, producto['producto_id']))
+                        producto_id = producto['producto_id']
+
+                    # Registrar en historial de entradas
+                    cursor.execute("""
+                        INSERT INTO historial_entradas 
+                        (numero_orden, numero_guia, numero_factura, producto_id, producto_nombre, cantidad, unidad, categoria, usuario) 
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (numero_orden, numero_guia, numero_factura, producto_id, producto_nombre, cantidad, unidad, categoria, usuario))
+
+                conexion.commit()
+                flash('✅ Entrada confirmada y registrada exitosamente.', 'success')
+
+            # Vaciar la lista temporal después de guardar
+            session['entrada_temporal'] = {
+                'productos': [],
+                'numero_orden': '',
+                'numero_guia': '',
+                'numero_factura': ''
+            }
+            session.modified = True
+            return redirect(url_for('entradas'))
+
+    return render_template(
+        'entradas.html', 
+        inventario=inventario, 
+        productos_temporales=session['entrada_temporal']['productos'],
+        datos=session['entrada_temporal']
+    )
 
 ####################################################################################################################
 @app.route('/inventario')
@@ -363,124 +420,116 @@ def distribucion():
 
     conexion = obtener_conexion()
     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-        cursor.execute("SELECT id, producto_nombre, stock_disponible, unidad, categoria FROM productos")
+        cursor.execute("SELECT producto_nombre, stock_disponible, unidad, categoria FROM productos")
         inventario = cursor.fetchall()
 
-    if request.method == 'POST':
-        usuario = session['usuario']  # Guardar quién está registrando la distribución
-        numero_guia = request.form.get("numero_guia", "").strip()
-        destino = request.form.get("destino", "").strip()
-        producto_id = request.form.get("producto_id", "").strip()
-        cantidad = int(request.form.get("cantidad", 0))
+    if 'distribucion_temporal' not in session:
+        session['distribucion_temporal'] = {
+            'productos': [],
+            'numero_guia': '',
+            'destino': ''
+        }
 
-        # Validación de datos
-        if not numero_guia or not destino or not producto_id or cantidad <= 0:
-            flash("❌ Todos los campos son obligatorios y la cantidad debe ser mayor a 0.", "error")
+    if request.method == 'POST':
+        if 'agregar_producto' in request.form:
+            session['distribucion_temporal']['numero_guia'] = request.form.get("numero_guia", "").strip()
+            session['distribucion_temporal']['destino'] = request.form.get("destino", "").strip()
+
+            producto_nombre = request.form.get("producto_nombre", "").strip()
+            cantidad = request.form.get("cantidad", "").strip()
+
+            if not producto_nombre or not cantidad.isdigit() or int(cantidad) <= 0:
+                flash('⚠️ Error: Debes ingresar un nombre de producto y cantidad válida.', 'error')
+                return redirect(url_for('distribucion'))
+
+            cantidad = int(cantidad)
+
+            with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                cursor.execute("SELECT stock_disponible FROM productos WHERE LOWER(TRIM(producto_nombre)) = LOWER(TRIM(%s))", (producto_nombre,))
+                producto_existente = cursor.fetchone()
+
+                if not producto_existente:
+                    flash(f'⚠️ Error: El producto "{producto_nombre}" no existe en el inventario.', 'error')
+                    return redirect(url_for('distribucion'))
+                
+                if cantidad > producto_existente['stock_disponible']:
+                    flash(f'⚠️ Error: Stock insuficiente para {producto_nombre}.', 'error')
+                    return redirect(url_for('distribucion'))
+
+            session['distribucion_temporal']['productos'].append({
+                'producto_nombre': producto_nombre,
+                'cantidad': cantidad
+            })
+            session.modified = True
+            flash(f'✅ Producto agregado a la distribución: {producto_nombre} - Cantidad: {cantidad}', 'success')
             return redirect(url_for('distribucion'))
 
-        with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-            # Verificar si el producto existe y tiene stock suficiente
-            cursor.execute("SELECT stock_disponible FROM productos WHERE id = %(id)s", {'id': producto_id})
-            producto = cursor.fetchone()
+        elif 'eliminar_producto' in request.form:
+            index = int(request.form.get('eliminar_producto'))
+            if 0 <= index < len(session['distribucion_temporal']['productos']):
+                eliminado = session['distribucion_temporal']['productos'].pop(index)
+                session.modified = True
+                flash(f'🗑 Producto eliminado de la distribución: {eliminado["producto_nombre"]}', 'warning')
+            return redirect(url_for('distribucion'))
 
-            if producto and producto['stock_disponible'] >= cantidad:
-                nuevo_stock = producto['stock_disponible'] - cantidad
+        elif 'confirmar_distribucion' in request.form:
+            usuario = session['usuario']
+            numero_guia = session['distribucion_temporal']['numero_guia']
+            destino = session['distribucion_temporal']['destino']
 
-                # Actualizar el stock en la base de datos
-                cursor.execute("""
-                    UPDATE productos 
-                    SET stock_disponible = %(stock_disponible)s 
-                    WHERE id = %(id)s
-                """, {'stock_disponible': nuevo_stock, 'id': producto_id})
+            if not session['distribucion_temporal']['productos']:
+                flash('⚠️ Error: No hay productos para distribuir.', 'error')
+                return redirect(url_for('distribucion'))
+            
 
-                # Insertar en historial de distribución
-                cursor.execute("""
-                    INSERT INTO historial_distribucion (usuario, producto_id, cantidad, destino, numero_guia) 
-                    VALUES (%(usuario)s, %(producto_id)s, %(cantidad)s, %(destino)s, %(numero_guia)s)
-                """, {
-                    'usuario': usuario,
-                    'producto_id': producto_id,
-                    'cantidad': cantidad,
-                    'destino': destino,
-                    'numero_guia': numero_guia
-                })
+            conexion= obtener_conexion()
+            with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                for producto in session['distribucion_temporal']['productos']:
+                    producto_nombre = producto['producto_nombre']
+                    cantidad = producto['cantidad']
+                    
 
+                      # 🔹 Verificar el stock actual en la base de datos
+                    cursor.execute("SELECT stock_disponible FROM productos WHERE LOWER(TRIM(producto_nombre)) = LOWER(TRIM(%s))", (producto_nombre,))
+                    producto_existente = cursor.fetchone()
+
+                    if not producto_existente:
+                        flash(f'⚠️ Error: El producto "{producto_nombre}" no existe en el inventario.', 'error')
+                        return redirect(url_for('distribucion'))
+
+                    stock_actual = producto_existente['stock_disponible']
+
+                    # 🔹 Si la cantidad a distribuir es mayor al stock disponible, no permitir la confirmación
+                    if cantidad > stock_actual:
+                        flash(f'⚠️ Error: Stock insuficiente para "{producto_nombre}". Solo hay {stock_actual} en inventario.', 'error')
+                        return redirect(url_for('distribucion'))
+
+                    # 🔹 Si hay stock suficiente, proceder con la actualización
+                    cursor.execute("UPDATE productos SET stock_disponible = stock_disponible - %s WHERE LOWER(TRIM(producto_nombre)) = LOWER(TRIM(%s))", (cantidad, producto_nombre))
+            
+                    cursor.execute("""
+                        INSERT INTO historial_distribucion 
+                        (numero_guia, producto_nombre, cantidad, destino, usuario) 
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (numero_guia, producto_nombre, cantidad, destino, usuario))
+                
                 conexion.commit()
-                flash(f"✅ Distribución registrada: Producto {producto_id}, Cantidad: {cantidad}", "success")
-            else:
-                flash("❌ No hay suficiente stock para realizar la distribución.", "error")
+                flash('✅ Distribución confirmada y registrada exitosamente.', 'success')
 
-        return redirect(url_for('distribucion'))
+            session['distribucion_temporal'] = {
+                'productos': [],
+                'numero_guia': '',
+                'destino': ''
+            }
+            session.modified = True
+            return redirect(url_for('distribucion'))
 
-    return render_template('distribucion.html', inventario=inventario)
-
-
-# ======================== GUARDAR DISTRIBUCIÓN EN POSTGRESQL ========================
-@app.route('/guardar_distribucion', methods=['POST'])
-def guardar_distribucion():
-    datos = request.get_json()
-    usuario = session.get("usuario", "Desconocido")
-    productos = datos.get("productos", [])
-    numero_guia = datos.get("numero_guia", "").strip()
-    destino = datos.get("destino", "").strip()
-
-    if not productos:
-        return jsonify({"success": False, "error": "❌ No hay productos para guardar."})
-
-    if not numero_guia or not destino:
-        return jsonify({"success": False, "error": "❌ Debes completar todos los campos obligatorios."})
-
-    conexion = obtener_conexion()
-    with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-        for producto in productos:
-            cursor.execute("SELECT id, stock_disponible FROM productos WHERE producto_nombre = %(nombre)s", {'nombre': producto["nombre"]})
-            producto_en_inventario = cursor.fetchone()
-
-            if producto_en_inventario and producto_en_inventario["stock_disponible"] >= producto["cantidad"]:
-                nuevo_stock = producto_en_inventario["stock_disponible"] - producto["cantidad"]
-
-                # Actualizar el stock disponible en la tabla productos
-                cursor.execute("""
-                    UPDATE productos 
-                    SET stock_disponible = %(stock_disponible)s 
-                    WHERE id = %(id)s
-                """, {'stock_disponible': nuevo_stock, 'id': producto_en_inventario["id"]})
-
-                # Insertar la distribución en el historial
-                cursor.execute("""
-                    INSERT INTO historial_distribucion (usuario, producto_id, cantidad, destino, numero_guia) 
-                    VALUES (%(usuario)s, %(producto_id)s, %(cantidad)s, %(destino)s, %(numero_guia)s)
-                """, {
-                    'usuario': usuario,
-                    'producto_id': producto_en_inventario["id"],
-                    'cantidad': producto["cantidad"],
-                    'destino': destino,
-                    'numero_guia': numero_guia
-                })
-
-            else:
-                return jsonify({"success": False, "error": f"❌ No hay suficiente stock de {producto['nombre']}."})
-
-        conexion.commit()
-
-    return jsonify({"success": True, "message": "✅ Distribución guardada exitosamente en PostgreSQL y stock actualizado."})
-
-
-# ======================== VERIFICAR INVENTARIO ========================
-@app.route('/verificar_inventario', methods=['POST'])
-def verificar_inventario():
-    datos = request.get_json()
-    nombre_producto = datos.get("nombre", "").strip()
-
-    conexion = obtener_conexion()
-    with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-        cursor.execute("SELECT stock_disponible FROM productos WHERE producto_nombre = %(nombre)s", {'nombre': nombre_producto})
-        producto = cursor.fetchone()
-
-    if producto:
-        return jsonify({"existe": True, "stock": producto["stock_disponible"]})
-    else:
-        return jsonify({"existe": False, "stock": 0})
+    return render_template(
+        'distribucion.html', 
+        inventario=inventario, 
+        productos_temporales=session['distribucion_temporal']['productos'],
+        datos=session['distribucion_temporal']
+    )
 
 #######################################################################################################################
 @app.route('/logout')

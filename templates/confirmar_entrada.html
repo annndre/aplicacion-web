@@ -1,54 +1,73 @@
 {% extends 'base.html' %}
 
-{% block title %}Registrar Entrada{% endblock %}
+{% block title %}Confirmar Entrada{% endblock %}
 
 {% block content %}
 <div class="contenedor-flex">
     <div class="formulario">
-        <h2>Registrar Entrada</h2>
+        <h2>📦 Confirmar Entrada</h2>
 
+        <!-- Mostrar los datos generales de la entrada -->
         <form method="POST">
-            <label>Número de Orden de Compra:</label>
-            <input type="text" name="numero_orden" required>
+            <label>📑 Número de Orden de Compra:</label>
+            <input type="text" name="numero_orden" value="{{ datos.numero_orden }}" readonly>
 
-            <label>Número de Guía de Despacho:</label>
-            <input type="text" name="numero_guia" required>
+            <label>📜 Número de Guía de Despacho:</label>
+            <input type="text" name="numero_guia" value="{{ datos.numero_guia }}" readonly>
 
-            <label>Número de Factura:</label>
-            <input type="text" name="numero_factura" required>
+            <label>📄 Número de Factura:</label>
+            <input type="text" name="numero_factura" value="{{ datos.numero_factura }}" readonly>
 
-            <label>Producto:</label>
-            <select name="producto_id" required>
-                {% for producto in inventario %}
-                    <option value="{{ producto.id }}">{{ producto_nombre }} (Stock actual: {{ producto.stock }})</option>
-                {% endfor %}
-            </select>
-
-            <label>Cantidad:</label>
-            <input type="number" name="cantidad" min="1" required>
-
-            <button type="submit">Agregar Producto</button>
+            {% if productos_temporales %}
+                <button type="submit" name="confirmar_entrada">✅ Confirmar Entrada</button>
+            {% else %}
+                <p style="color: red;">⚠️ No hay productos en la entrada. Agrega productos antes de confirmar.</p>
+            {% endif %}
         </form>
     </div>
 
     <div class="lista-solicitudes">
-        <h3>Productos agregados para Entrada</h3>
-        <ul class="productos-lista">
-            {% for item in datos.get('productos', []) %}
-                <li>
-                    {{ item.producto_nombre }} - {{ item.cantidad }} unidades
-                    <a href="{{ url_for('eliminar_producto_entrada', index=loop.index0) }}" class="btn-eliminar">❌ Eliminar</a>
-                </li>
-            {% endfor %}
-        </ul>
-
-        {% if datos.get('productos') %}
-            <form method="GET" action="{{ url_for('confirmar_entrada') }}">
-                <button type="submit">Confirmar Entrada</button>
-            </form>
+        <h3>📋 Productos en la Entrada</h3>
+        {% if productos_temporales %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Unidad</th>
+                    <th>Categoría</th>
+                    <th>Estado</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for producto in productos_temporales %}
+                <tr>
+                    <td>{{ producto.producto_nombre }}</td>
+                    <td>{{ producto.cantidad }}</td>
+                    <td>{{ producto.unidad }}</td>
+                    <td>{{ producto.categoria }}</td>
+                    <td>
+                        {% if producto.nuevo %}
+                            <span style="color: green;">🆕 Nuevo</span>
+                        {% else %}
+                            <span style="color: blue;">✔️ Existente</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" style="display:inline;">
+                            <button type="submit" name="eliminar_producto" value="{{ loop.index0 }}">❌ Eliminar</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+            <p>No hay productos agregados aún.</p>
         {% endif %}
 
-        <h3>Historial de Alertas</h3>
+        <h3>⚠️ Historial de Alertas</h3>
         <ul class="alertas">
             {% with messages = get_flashed_messages() %}
                 {% for message in messages %}
@@ -59,6 +78,7 @@
     </div>
 </div>
 
+<!-- Estilos CSS -->
 <style>
 .contenedor-flex {
     display: flex;
@@ -71,18 +91,18 @@
     border-radius: 10px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.3);
 }
-.productos-lista li {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
 }
-.btn-eliminar {
-    background-color: #f44336;
-    color: white;
-    padding: 5px;
-    text-decoration: none;
-    border-radius: 5px;
+th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+th {
+    background-color: #f4f4f4;
 }
 .alertas .alert {
     background-color: #ffdddd;
@@ -92,4 +112,5 @@
     border-radius: 5px;
 }
 </style>
+
 {% endblock %}

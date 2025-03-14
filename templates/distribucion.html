@@ -1,144 +1,139 @@
 {% extends 'base.html' %}
 
-{% block title %}Distribución de Productos{% endblock %}
+{% block title %}Registrar Distribución{% endblock %}
 
 {% block content %}
-<div class="contenedor">
-    <h2>📝 Registrar Distribución de Productos</h2>
+<div class="contenedor-flex">
+    <div class="formulario">
+        <h2>🚚 Registrar Distribución</h2>
 
-    <!-- Sección para ingresar productos manualmente -->
-    <h3>📦 Ingresar productos</h3>
-    <table id="tabla-productos">
-        <thead>
-            <tr>
-                <th>Producto</th>
-                <th>Stock Disponible</th>
-                <th>Cantidad a Distribuir</th>
-                <th>Acción</th>
-            </tr>
-        </thead>
-        <tbody>
-        </tbody>
-    </table>
-    <button id="agregar-producto">➕ Agregar Producto</button>
+        <form method="POST">
+            <label>📜 Número de Guía de Despacho:</label>
+            <input type="text" name="numero_guia" required value="{{ datos.get('numero_guia', '') }}">
 
-    <hr>
+            <label>📍 Destino:</label>
+            <input type="text" name="destino" required value="{{ datos.get('destino', '') }}">
 
-    <!-- Información de la Guía de Despacho -->
-    <h3>📜 Información de la Guía</h3>
-    <label for="numero_guia">Número de Guía de Despacho:</label>
-    <input type="text" id="numero_guia" required>
+            <label>🔎 Buscar o Ingresar Producto:</label>
+            <input type="text" id="producto_nombre" name="producto_nombre" placeholder="Escribe o selecciona un producto" oninput="filtrarProductos()" required>
 
-    <label for="destino">Destino:</label>
-    <input type="text" id="destino" required>
-
-    <hr>
-
-    <!-- Botón para guardar en PostgreSQL -->
-    <button id="guardar-en-postgres">💾 Guardar en PostgreSQL</button>
-</div>
-
-<!-- Script para manejar productos y conexión con PostgreSQL -->
-<script>
-    // Agregar manualmente un producto a la tabla
-    document.getElementById("agregar-producto").addEventListener("click", function() {
-        let table = document.getElementById("tabla-productos").querySelector("tbody");
-        let row = table.insertRow();
-        row.innerHTML = `
-            <td>
-                <input type="text" class="producto-nombre" oninput="filtrarProductos(this)">
-                <select class="producto-lista" onchange="seleccionarProducto(this)">
-                    <option value="">Seleccione un producto</option>
-                    {% for producto in inventario %}
-                    <option value="{{ producto.id }}" data-nombre="{{ producto.producto_nombre }}" data-stock="{{ producto.stock_disponible }}">
+            <label>📋 Seleccionar Producto Existente:</label>
+            <select id="producto_select" onchange="actualizarDatosProducto()">
+                <option value="">Seleccionar Producto</option>
+                {% for producto in inventario %}
+                    <option data-nombre="{{ producto.producto_nombre }}" 
+                            data-stock="{{ producto.stock_disponible }}">
                         {{ producto.producto_nombre }} (Stock: {{ producto.stock_disponible }})
                     </option>
-                    {% endfor %}
-                </select>
-            </td>
-            <td class="stock-disponible">-</td>
-            <td><input type="number" class="producto-cantidad" min="1"></td>
-            <td><button type="button" class="eliminar-fila">❌</button></td>
-        `;
-    });
+                {% endfor %}
+            </select>
 
-    // Eliminar fila de la tabla
-    document.getElementById("tabla-productos").addEventListener("click", function(event) {
-        if (event.target.classList.contains("eliminar-fila")) {
-            event.target.closest("tr").remove();
-        }
-    });
+            <label>📊 Stock Disponible:</label>
+            <input type="text" id="stock_disponible" disabled value="">
 
-    // Guardar distribución en PostgreSQL
-    document.getElementById("guardar-en-postgres").addEventListener("click", function() {
-        let productos = [];
-        let error = false;
+            <label>🔢 Cantidad a Distribuir:</label>
+            <input type="number" name="cantidad" id="cantidad" min="1" required>
 
-        document.querySelectorAll("#tabla-productos tbody tr").forEach(row => {
-            let nombre = row.querySelector(".producto-nombre").value.trim();
-            let cantidad = parseInt(row.querySelector(".producto-cantidad").value);
-            let stockDisponible = parseInt(row.querySelector(".stock-disponible").textContent);
+            <button type="submit" name="agregar_producto">➕ Agregar Producto</button>
+        </form>
+    </div>
 
-            if (!nombre || isNaN(cantidad) || cantidad <= 0) {
-                alert("❌ Debes ingresar un producto válido con una cantidad mayor a 0.");
-                error = true;
-                return;
-            }
+    <div class="lista-solicitudes">
+        <h3>📋 Productos a Distribuir</h3>
+        <ul class="productos-lista">
+            {% for item in productos_temporales %}
+                <li>
+                    {{ item.producto_nombre }} - {{ item.cantidad }} unidades
+                    <form method="POST" style="display:inline;">
+                        <button type="submit" name="eliminar_producto" value="{{ loop.index0 }}">❌ Eliminar</button>
+                    </form>
+                </li>
+            {% endfor %}
+        </ul>
 
-            if (stockDisponible >= 0 && cantidad > stockDisponible) {
-                alert(`⚠️ La cantidad ingresada para "${nombre}" excede el stock disponible (${stockDisponible}).`);
-                error = true;
-                return;
-            }
+        {% if productos_temporales %}
+            <form method="POST">
+                <input type="hidden" name="numero_guia" value="{{ datos.get('numero_guia', '') }}">
+                <input type="hidden" name="destino" value="{{ datos.get('destino', '') }}">
+                <button type="submit" name="confirmar_distribucion">✅ Confirmar Distribución</button>
+            </form>
+        {% endif %}
 
-            productos.push({ nombre: nombre, cantidad: cantidad });
-        });
+        <h3>⚠️ Historial de Alertas</h3>
+        <ul class="alertas">
+            {% with messages = get_flashed_messages() %}
+                {% for message in messages %}
+                    <li class="alert">{{ message }}</li>
+                {% endfor %}
+            {% endwith %}
+        </ul>
+    </div>
+</div>
 
-        if (error) return;
+<!-- Estilos CSS -->
+<style>
+.contenedor-flex {
+    display: flex;
+    gap: 20px;
+}
+.formulario, .lista-solicitudes {
+    width: 50%;
+    background-color: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+.productos-lista li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.alertas .alert {
+    background-color: #ffdddd;
+    border: 1px solid #f44336;
+    padding: 8px;
+    margin: 5px 0;
+    border-radius: 5px;
+}
+</style>
 
-        let numero_guia = document.getElementById("numero_guia").value.trim();
-        let destino = document.getElementById("destino").value.trim();
+<!-- Script para manejar productos existentes y nuevos -->
+<script>
+function filtrarProductos() {
+    const input = document.getElementById('producto_nombre').value.toLowerCase();
+    const select = document.getElementById('producto_select');
+    const opciones = select.options;
+    let coincidencia = null;
 
-        if (!numero_guia || !destino) {
-            alert("❌ Debes completar todos los campos obligatorios.");
-            return;
-        }
+    for (let i = 0; i < opciones.length; i++) {
+        const nombreProducto = opciones[i].getAttribute('data-nombre') || '';
+        const match = nombreProducto.toLowerCase().includes(input);
 
-        fetch("/guardar_distribucion", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ productos: productos, numero_guia: numero_guia, destino: destino })
-        }).then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert("✅ Distribución guardada en PostgreSQL exitosamente.");
-                location.reload();
-            } else {
-                alert("Error al guardar en PostgreSQL.");
-            }
-        });
-    });
+        opciones[i].style.display = match || opciones[i].value === '' ? "" : "none";
 
-    // Filtrar productos en la lista desplegable a medida que el usuario escribe
-    function filtrarProductos(input) {
-        let select = input.closest("td").querySelector(".producto-lista");
-        let filtro = input.value.toLowerCase();
-        let opciones = select.options;
-
-        for (let i = 0; i < opciones.length; i++) {
-            let nombreProducto = opciones[i].getAttribute("data-nombre") || "";
-            opciones[i].style.display = nombreProducto.toLowerCase().includes(filtro) ? "" : "none";
+        if (match && opciones[i].value !== "") {
+            coincidencia = opciones[i];
         }
     }
 
-    // Seleccionar producto de la lista desplegable y mostrar su cantidad disponible
-    function seleccionarProducto(select) {
-        let input = select.closest("td").querySelector(".producto-nombre");
-        let stockTd = select.closest("tr").querySelector(".stock-disponible");
-        let cantidadDisponible = select.options[select.selectedIndex].getAttribute("data-stock") || "-";
-
-        input.value = select.options[select.selectedIndex].getAttribute("data-nombre");
-        stockTd.textContent = cantidadDisponible;
+    if (coincidencia) {
+        select.value = coincidencia.value;
+        actualizarDatosProducto();
+    } else {
+        select.value = ''; 
+        document.getElementById("stock_disponible").value = "";
     }
+}
+
+function actualizarDatosProducto() {
+    let select = document.getElementById("producto_select");
+    let selectedOption = select.options[select.selectedIndex];
+    let productoNombre = selectedOption.getAttribute("data-nombre") || "";
+    let stockDisponible = selectedOption.getAttribute("data-stock") || "";
+    
+    document.getElementById("producto_nombre").value = productoNombre;
+    document.getElementById("stock_disponible").value = stockDisponible;
+}
 </script>
 {% endblock %}
