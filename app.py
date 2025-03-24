@@ -7,6 +7,10 @@ import psycopg2.extras
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from werkzeug.utils import secure_filename
 
+from dotenv import load_dotenv
+load_dotenv()
+
+
 
 app = Flask(__name__)
 app.secret_key = 'super_secret_key'
@@ -19,12 +23,13 @@ if not os.path.exists(app.config['UPLOAD_FOLDER']):
 # ======================== CONEXIÓN POSTGRESQL ========================
 def obtener_conexion():
     return psycopg2.connect(
-        host=os.getenv("DB_HOST", "dpg-cv8rv652ng1s73bd3ee0-a.oregon-postgres.render.com"),
-        database=os.getenv("DB_NAME", "inventario_db_gg37"),
-        user=os.getenv("DB_USER", "inventario_db_gg37_user"),
+        host=os.getenv("DB_HOST"),
+        database=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),  # 💡 Cambiar a variables de entorno para más seguridad
         port=5432,
-        cursor_factory=psycopg2.extras.DictCursor
+        cursor_factory=psycopg2.extras.DictCursor,
+        sslmode='require'
     )
 # ======================== RUTAS ========================
 
@@ -465,7 +470,7 @@ def distribucion():
 
     conexion = obtener_conexion()
     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-        cursor.execute("SELECT producto_nombre, stock_disponible, unidad, categoria FROM productos")
+        cursor.execute("SELECT producto_nombre, stock_disponible, unidad, categoria, estado FROM productos")
         inventario = cursor.fetchall()
 
     if 'distribucion_temporal' not in session:
@@ -490,13 +495,22 @@ def distribucion():
             cantidad = int(cantidad)
 
             with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                cursor.execute("SELECT stock_disponible FROM productos WHERE LOWER(TRIM(producto_nombre)) = LOWER(TRIM(%s))", (producto_nombre,))
+                cursor.execute("""
+                    SELECT stock_disponible, estado 
+                    FROM productos 
+                    WHERE LOWER(TRIM(producto_nombre)) = LOWER(TRIM(%s))
+                """, (producto_nombre,))
                 producto_existente = cursor.fetchone()
 
                 if not producto_existente:
                     flash(f'⚠️ Error: El producto "{producto_nombre}" no existe en el inventario.', 'error')
                     return redirect(url_for('distribucion'))
-                
+
+                # 🚫 Validar que el producto esté operativo
+                if producto_existente['estado'].strip().upper() != 'OPERATIVO':
+                    flash(f'❌ El producto "{producto_nombre}" no puede ser distribuido porque no está operativo.', 'error')
+                    return redirect(url_for('distribucion'))
+
                 if cantidad > producto_existente['stock_disponible']:
                     flash(f'⚠️ Error: Stock insuficiente para {producto_nombre}.', 'error')
                     return redirect(url_for('distribucion'))
@@ -516,6 +530,7 @@ def distribucion():
                 session.modified = True
                 flash(f'🗑 Producto eliminado de la distribución: {eliminado["producto_nombre"]}', 'warning')
             return redirect(url_for('distribucion'))
+
 
         elif 'confirmar_distribucion' in request.form:
             usuario = session['usuario']
