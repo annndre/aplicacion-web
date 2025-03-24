@@ -49,11 +49,18 @@
                     <td>{{ producto.categoria }}</td>
                     <td>
                         {% if producto.nuevo %}
-                            <span style="color: green;">🆕 Nuevo</span>
+                            <div style="color: green;">
+                                🆕 <strong>Nuevo producto</strong><br>
+                                <small>Se añadirá al inventario</small>
+                            </div>
                         {% else %}
-                            <span style="color: blue;">✔️ Existente</span>
+                            <div style="color: blue;">
+                                ✔️ <strong>Existente</strong><br>
+                                <small>Producto ya registrado</small>
+                            </div>
                         {% endif %}
                     </td>
+                    
                     <td>
                         <form method="POST" style="display:inline;">
                             <button type="submit" name="eliminar_producto" value="{{ loop.index0 }}">❌ Eliminar</button>

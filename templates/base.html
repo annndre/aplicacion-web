@@ -105,13 +105,16 @@
 </div>
 
 <nav class="main-nav">
-    <a href="{{ url_for('solicitudes') }}">📄 Solicitudes</a>
-    <a href="{{ url_for('devoluciones') }}">↩️ Devoluciones</a>
-    <a href="{{ url_for('entradas') }}">📥 Entradas</a>
-    <a href="{{ url_for('distribucion') }}">🚚 Distribución</a>
-    <a href="{{ url_for('ver_inventario') }}">📦 Inventario</a>
+    {% if session['rol'] == 'admin' %}
+        <a href="{{ url_for('solicitudes') }}">📄 Solicitudes</a>
+        <a href="{{ url_for('devoluciones') }}">↩️ Devoluciones</a>
+        <a href="{{ url_for('entradas') }}">📥 Entradas</a>
+        <a href="{{ url_for('distribucion') }}">🚚 Distribución</a>
+        <a href="{{ url_for('ver_inventario') }}">📦 Inventario</a>
+    {% elif session['rol'] == 'inventario' %}
+        <a href="{{ url_for('ver_inventario') }}">📦 Inventario</a>
+    {% endif %}
     <a href="{{ url_for('logout') }}">🚪 Cerrar Sesión</a>
-    
 </nav>
 
 <div class="flash-messages">

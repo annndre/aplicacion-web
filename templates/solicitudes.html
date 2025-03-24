@@ -23,14 +23,17 @@
             <select name="producto_id" id="producto_id" required onchange="actualizarStockDisponible()">
                 <option value="">Seleccione un producto</option>
                 {% for producto in inventario %}
-                    <option value="{{ producto.id }}" data-nombre="{{ producto.producto_nombre }}" data-stock="{{ producto.stock_disponible }}">
-                         {{ producto.producto_nombre }} (Stock: {{ producto.stock_disponible }})
+                    <option value="{{ producto.id }}" data-nombre="{{ producto.producto_nombre }}" 
+                            data-stock="{{ producto.stock_disponible }}" data-estado="{{ producto.estado }}">
+                        {{ producto.producto_nombre }} (Stock: {{ producto.stock_disponible }} | Estado: {{ "Operativo" if producto.estado == "OPERATIVO" else "NO OPERATIVO" }})
                     </option>
                 {% endfor %}
             </select>
 
             <label>📊 Stock Disponible:</label>
             <input type="text" id="stock_disponible" disabled>
+            <label>⚙️ Estado del Producto:</label>
+            <input type="text" id="estado_producto" disabled>
 
             <label>📊 Cantidad:</label>
             <input type="number" name="cantidad" id="cantidad" min="1" required>
@@ -94,25 +97,25 @@
     margin-bottom: 10px;
 }
 .btn-eliminar {
-    background-color: #ff4d4d;
+    background-color: #e20000;
     color: white;
     padding: 5px;
     text-decoration: none;
     border-radius: 5px;
 }
 .alertas .alert {
-    background-color: #f10b0b;
+    background-color: #ffb5b5;
     border: 1px solid #fd8f8f;
     padding: 8px;
     margin: 5px 0;
     border-radius: 5px;
 }
 .alert-grave {
-    background-color: #ff4d4d;
+    background-color: #f8b2b2;
     color: rgb(0, 0, 0);
     font-weight: bold;
-    border: 2px solid #d10000;
-    box-shadow: 0 0 15px rgba(255, 0, 0, 0.7);
+    border: 2px solid #ffb4b4;
+    box-shadow: 0 0 15px rgba(255, 202, 202, 0.7);
     text-align: center;
     margin-top: 20px;
     padding: 20px;
@@ -145,7 +148,10 @@ function filtrarProductos() {
 function actualizarStockDisponible() {
     let selectedOption = document.getElementById("producto_id").options[document.getElementById("producto_id").selectedIndex];
     let stockDisponible = selectedOption.getAttribute("data-stock") || "0";
+    let estadoProducto = selectedOption.getAttribute("data-estado") || "Desconocido";
+
     document.getElementById("stock_disponible").value = stockDisponible;
+    document.getElementById("estado_producto").value = estadoProducto;
     document.getElementById("cantidad").setAttribute("max", stockDisponible);
 }
 </script>

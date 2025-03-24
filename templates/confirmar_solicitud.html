@@ -6,6 +6,15 @@
 <div class="contenedor-confirmar">
     <h2>Confirmar Solicitud</h2>
 
+    
+    {% if alertas_stock_critico %}
+        <div class="alert alert-danger text-center fw-bold fs-3 p-4">
+            {% for alerta in alertas_stock_critico %}
+                <p>{{ alerta }}</p>
+            {% endfor %}
+        </div>
+    {% endif %}
+
     <p><strong>Nombre:</strong> {{ solicitud.nombre_solicitante }}</p>
     <p><strong>RUT:</strong> {{ solicitud.rut_solicitante }}</p>
 
@@ -37,6 +46,18 @@
     max-width: 600px;
     margin: 20px auto;
 }
+
+.alert {
+    background-color: #ff9898;
+    color: white;
+    font-size: 22px;
+    font-weight: bold;
+    text-align: center;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+
+}
 button {
     margin: 10px 5px;
     padding: 10px 15px;
@@ -51,7 +72,7 @@ button[type="submit"] {
 a {
     text-decoration: none;
     color: white;
-    background-color: #f44336;
+    background-color: #ffc2be;
     padding: 10px 15px;
     border-radius: 5px;
     cursor: pointer;

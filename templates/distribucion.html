@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends 'base.html' %} 
 
 {% block title %}Registrar Distribución{% endblock %}
 
@@ -8,7 +8,7 @@
         <h2>🚚 Registrar Distribución</h2>
 
         <form method="POST">
-            <label>📜 Número de Guía de Despacho:</label>
+            <label>📝 Número de Guía de Despacho:</label>
             <input type="text" name="numero_guia" required value="{{ datos.get('numero_guia', '') }}">
 
             <label>📍 Destino:</label>
@@ -22,14 +22,18 @@
                 <option value="">Seleccionar Producto</option>
                 {% for producto in inventario %}
                     <option data-nombre="{{ producto.producto_nombre }}" 
-                            data-stock="{{ producto.stock_disponible }}">
-                        {{ producto.producto_nombre }} (Stock: {{ producto.stock_disponible }})
+                            data-stock="{{ producto.stock_disponible }}" 
+                            data-estado="{{ producto.estado }}">
+                        {{ producto.producto_nombre }} (Stock: {{ producto.stock_disponible }}, Estado: {{ producto.estado }})
                     </option>
                 {% endfor %}
             </select>
 
             <label>📊 Stock Disponible:</label>
             <input type="text" id="stock_disponible" disabled value="">
+
+            <label>🔌 Estado:</label>
+            <input type="text" id="estado" disabled value="">
 
             <label>🔢 Cantidad a Distribuir:</label>
             <input type="number" name="cantidad" id="cantidad" min="1" required>
@@ -104,36 +108,38 @@ function filtrarProductos() {
     const input = document.getElementById('producto_nombre').value.toLowerCase();
     const select = document.getElementById('producto_select');
     const opciones = select.options;
-    let coincidencia = null;
 
     for (let i = 0; i < opciones.length; i++) {
         const nombreProducto = opciones[i].getAttribute('data-nombre') || '';
         const match = nombreProducto.toLowerCase().includes(input);
 
         opciones[i].style.display = match || opciones[i].value === '' ? "" : "none";
-
-        if (match && opciones[i].value !== "") {
-            coincidencia = opciones[i];
-        }
     }
 
-    if (coincidencia) {
-        select.value = coincidencia.value;
-        actualizarDatosProducto();
-    } else {
-        select.value = ''; 
-        document.getElementById("stock_disponible").value = "";
-    }
+    // ⚠️ Aquí ya NO se autocompleta el campo "producto_nombre"
+    // Solo se filtran opciones visibles en el <select>
 }
 
 function actualizarDatosProducto() {
     let select = document.getElementById("producto_select");
     let selectedOption = select.options[select.selectedIndex];
-    let productoNombre = selectedOption.getAttribute("data-nombre") || "";
-    let stockDisponible = selectedOption.getAttribute("data-stock") || "";
-    
-    document.getElementById("producto_nombre").value = productoNombre;
-    document.getElementById("stock_disponible").value = stockDisponible;
+
+    if (selectedOption.value !== "") {
+        // ✅ Solo autocompleta cuando se selecciona desde el combo
+        let productoNombre = selectedOption.getAttribute("data-nombre") || "";
+        let stockDisponible = selectedOption.getAttribute("data-stock") || "";
+        let estadoProducto = selectedOption.getAttribute("data-estado") || "";
+
+        document.getElementById("producto_nombre").value = productoNombre;
+        document.getElementById("stock_disponible").value = stockDisponible;
+        document.getElementById("estado").value = estadoProducto;
+    } else {
+        // Limpiar campos si vuelve a "Seleccionar Producto"
+        document.getElementById("stock_disponible").value = "";
+        document.getElementById("estado").value = "";
+    }
 }
 </script>
+
+    
 {% endblock %}

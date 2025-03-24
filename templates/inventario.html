@@ -9,6 +9,13 @@
     <label for="buscarProducto">🔎 Buscar Producto:</label>
     <input type="text" id="buscarProducto" placeholder="Ingrese nombre del producto..." oninput="filtrarProductos()">
 
+    <label for="filtroEstado">📌 Filtrar por Estado:</label>
+    <select id="filtroEstado" onchange="filtrarProductos()">
+        <option value="">Todos</option>
+        <option value="OPERATIVO">OPERATIVO</option>
+        <option value="NO OPERATIVO">NO OPERATIVO</option>
+    </select>
+
     <label for="stockDisponible">📊 Stock Disponible:</label>
     <input type="text" id="stockDisponible" readonly>
 </div>
@@ -18,8 +25,10 @@
         <tr>
             <th>ID Producto</th>
             <th>Descripción/Nombre</th>
-            <th>Stock Disponible</th>  <!-- 🔹 Modificado: "cantidad" → "stock_disponible" -->
+            <th>Stock Disponible</th>
             <th>Stock Crítico</th>
+            <th>Categoría</th>  <!-- 🔹 Nueva columna -->
+            <th>Estado</th>  <!-- 🔹 Nueva columna -->
             {% if inventario and inventario[0] is defined and 'solicitudes' in inventario[0] %}
                 <th>Cantidad Solicitudes</th>
             {% endif %}
@@ -29,9 +38,11 @@
         {% for producto in inventario %}
         <tr>
             <td>{{ producto.id }}</td>
-            <td>{{ producto.producto_nombre }}</td> <!-- 🔹 Modificado: "nombre" → "producto_nombre" -->
-            <td>{{ producto.stock_disponible }}</td> <!-- 🔹 Modificado: "cantidad" → "stock_disponible" -->
+            <td>{{ producto.producto_nombre }}</td>
+            <td>{{ producto.stock_disponible }}</td>
             <td>{{ producto.stock_critico }}</td>
+            <td>{{ producto.categoria }}</td>  <!-- 🔹 Nueva columna -->
+            <td class="estado {{ 'operativo' if producto.estado == 'OPERATIVO' else 'no-operativo' }}">{{ producto.estado }}</td>  <!-- 🔹 Nueva columna -->
             {% if 'solicitudes' in producto %}
                 <td>{{ producto.solicitudes }}</td>
             {% endif %}
@@ -40,18 +51,36 @@
     </tbody>
 </table>
 
+<style>
+    .estado.operativo {
+        background-color: rgba(144, 238, 144, 0.5); /* Verde suave */
+        color: #155724;
+        font-weight: bold;
+    }
+    .estado.no-operativo {
+        background-color: rgba(255, 99, 71, 0.5); /* Rojo suave */
+        color: #721c24;
+        font-weight: bold;
+    }
+</style>
+
 <script>
     function filtrarProductos() {
-        const filtro = document.getElementById('buscarProducto').value.toLowerCase();
+        const filtroNombre = document.getElementById('buscarProducto').value.toLowerCase();
+        const filtroEstado = document.getElementById('filtroEstado').value;
         const filas = document.querySelectorAll("#tablaInventario tr");
         let stockDisponible = "";
 
         filas.forEach(fila => {
             const nombreProducto = fila.cells[1].innerText.toLowerCase();
+            const estadoProducto = fila.cells[5].innerText;
+            
+            const coincideNombre = nombreProducto.includes(filtroNombre);
+            const coincideEstado = filtroEstado === "" || estadoProducto === filtroEstado;
 
-            if (nombreProducto.includes(filtro)) {
+            if (coincideNombre && coincideEstado) {
                 fila.style.display = "";
-                stockDisponible = fila.cells[2].innerText;  // 🔹 Modificado: Ahora usa "stock_disponible"
+                stockDisponible = fila.cells[2].innerText;
             } else {
                 fila.style.display = "none";
             }
