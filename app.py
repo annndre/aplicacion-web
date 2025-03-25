@@ -136,32 +136,43 @@ def eliminar_producto(index):
 @app.route('/confirmar_solicitud', methods=['GET', 'POST'])
 def confirmar_solicitud():
     if 'usuario' not in session:
+        flash("Acceso restringido", "danger")
         return redirect(url_for('login'))
 
-    datos = session.get('solicitud_temporal')
-    if not datos:
+    if 'solicitud_temporal' not in session:
         return redirect(url_for('solicitudes'))
 
+    datos = session['solicitud_temporal']
     usuario = session['usuario']
-    alertas_stock_critico = []  # Para almacenar productos con stock crítico
-
 
     if request.method == 'POST':
-        conexion = obtener_conexion()
-        with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-            for item in datos['productos']:
-                cursor.execute("SELECT stock_disponible, stock_critico FROM productos WHERE id = %(id)s", {'id': item['producto_id']})
-                producto = cursor.fetchone()
+        try:
+            if not datos.get('productos'):
+                flash('⚠️ No hay productos para confirmar.', 'error')
+                return redirect(url_for('confirmar_solicitud'))
 
-                if producto and producto['stock_disponible'] >= item['cantidad']:  # Validación correcta
+            alertas_stock_critico = []
+
+            conexion = obtener_conexion()
+            with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                for item in datos['productos']:
+                    cursor.execute("SELECT stock_disponible, stock_critico FROM productos WHERE id = %(id)s", {'id': item['producto_id']})
+                    producto = cursor.fetchone()
+
+                    if not producto or producto['stock_disponible'] < item['cantidad']:
+                        flash(f'❌ No hay suficiente stock para {item["producto_nombre"]}. Solicitud cancelada.', 'error')
+                        continue
+
                     nuevo_stock = producto['stock_disponible'] - item['cantidad']
 
+                    # Actualizar stock
                     cursor.execute("""
                         UPDATE productos 
                         SET stock_disponible = %(stock_disponible)s 
                         WHERE id = %(id)s
                     """, {'stock_disponible': nuevo_stock, 'id': item['producto_id']})
 
+                    # Registrar en historial de solicitudes
                     cursor.execute("""
                         INSERT INTO historial_solicitudes 
                         (nombre_solicitante, rut_solicitante, producto_id, producto_nombre, cantidad, centro_costo, usuario)
@@ -176,20 +187,45 @@ def confirmar_solicitud():
                         'usuario': usuario
                     })
 
-                    flash(f'Solicitud confirmada por {usuario}: {item["producto_nombre"]} - Nuevo stock: {nuevo_stock}')
-                                        # Verificar si el stock es menor o igual al stock crítico
+                    # Stock crítico
                     if nuevo_stock <= producto['stock_critico']:
-                        alertas_stock_critico.append(f'⚠️ ¡ATENCIÓN! {item["producto_nombre"]} ha alcanzado el stock crítico ({nuevo_stock} unidades). Favor realizar pedido.')
+                        alertas_stock_critico.append(
+                            f'⚠️ ¡ATENCIÓN! {item["producto_nombre"]} ha alcanzado el stock crítico ({nuevo_stock} unidades). Favor realizar pedido.'
+                        )
 
-                else:
-                    flash(f'❌ No hay suficiente stock para {item["producto_nombre"]}. Solicitud cancelada.')
+                        # Registrar evento en tabla
+                        cursor.execute("""
+                            INSERT INTO registro_stock_critico 
+                            (producto_id, nombre_producto, fecha, stock_disponible, stock_critico)
+                            VALUES (%s, %s, NOW(), %s, %s)
+                        """, (
+                            item['producto_id'],
+                            item['producto_nombre'],
+                            nuevo_stock,
+                            producto['stock_critico']
+                        ))
+
+                        # Flash solo si es crítico
+                        flash(f'Solicitud confirmada por {usuario}: {item["producto_nombre"]} - Stock crítico alcanzado ({nuevo_stock})', 'warning')
 
             conexion.commit()
-            session.pop('solicitud_temporal', None)
-            
+            flash('✅ Solicitud procesada exitosamente.', 'success')
 
-        return render_template('confirmar_solicitud.html', solicitud=datos, alertas_stock_critico=alertas_stock_critico)
-    return render_template('confirmar_solicitud.html', solicitud=datos)
+            # Limpiar sesión temporal
+            session.pop('solicitud_temporal', None)
+            session.modified = True
+
+            return redirect(url_for('solicitudes'))
+
+        except Exception as e:
+            flash(f"❌ Error al confirmar solicitud: {str(e)}", "error")
+            return redirect(url_for('confirmar_solicitud'))
+
+    # Render en GET
+    return render_template(
+        'confirmar_solicitud.html',
+        solicitud=datos
+    )
 
 ####################################################################################################################
 @app.route('/devoluciones', methods=['GET', 'POST'])
@@ -318,23 +354,18 @@ def entradas():
 
     if request.method == 'POST':
         if 'agregar_producto' in request.form:
-            # Guardar los datos de la orden en la sesión
-            session['entrada_temporal']['numero_orden'] = request.form.get('numero_orden', '').strip()
-            session['entrada_temporal']['numero_guia'] = request.form.get('numero_guia', '').strip()
-            session['entrada_temporal']['numero_factura'] = request.form.get('numero_factura', '').strip()
-
-            # Capturar datos del producto
+            # Datos comunes
             producto_nombre = request.form.get('producto_nombre', '').strip()
             cantidad = int(request.form.get('cantidad', 0))
             unidad = request.form.get('unidad', '').strip()
             categoria = request.form.get('categoria', 'General').strip()
 
-            # Validación mínima
+            # Validación
             if not producto_nombre or cantidad <= 0:
                 flash('⚠️ Error: Debes ingresar un nombre de producto y cantidad válida.', 'error')
                 return redirect(url_for('entradas'))
 
-            # Buscar coincidencia por nombre exacto
+            # Buscar si ya existe
             with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
                 cursor.execute("""
                     SELECT id, stock_disponible FROM productos
@@ -343,7 +374,7 @@ def entradas():
                 producto_existente = cursor.fetchone()
 
             if producto_existente:
-                # Producto existente → solo sumar stock después
+            # Producto existente
                 session['entrada_temporal']['productos'].append({
                     'producto_id': producto_existente['id'],
                     'producto_nombre': producto_nombre,
@@ -353,19 +384,22 @@ def entradas():
                     'nuevo': False
                 })
             else:
-                # Producto nuevo → se agregará al inventario al confirmar
+                # Solo si es nuevo capturamos stock_critico
+                stock_critico = int(request.form.get('stock_critico', 0))
                 session['entrada_temporal']['productos'].append({
                     'producto_id': None,
                     'producto_nombre': producto_nombre,
                     'cantidad': cantidad,
                     'unidad': unidad,
                     'categoria': categoria,
+                    'stock_critico': stock_critico,
                     'nuevo': True
                 })
 
             session.modified = True
             flash(f'✅ Producto agregado: {producto_nombre} - Cantidad: {cantidad}', 'success')
             return redirect(url_for('entradas'))
+
 
         elif 'eliminar_producto' in request.form:
             # Eliminar un producto de la lista temporal
@@ -397,11 +431,11 @@ def entradas():
                         producto_id = producto.get('producto_id')
 
                         if producto['nuevo']:
-                            # Insertar nuevo producto en la base de datos
+                            stock_critico = producto.get('stock_critico', 0)
                             cursor.execute("""
-                                INSERT INTO productos (producto_nombre, unidad, stock_disponible, categoria) 
-                                VALUES (%s, %s, %s, %s) RETURNING id
-                            """, (producto_nombre, unidad, cantidad, categoria))
+                                INSERT INTO productos (producto_nombre, unidad, stock_disponible, categoria, stock_critico) 
+                                VALUES (%s, %s, %s, %s, %s) RETURNING id
+                            """, (producto_nombre, unidad, cantidad, categoria, stock_critico))
                             nuevo_producto = cursor.fetchone()
                             
                             if nuevo_producto:

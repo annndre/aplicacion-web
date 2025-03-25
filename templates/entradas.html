@@ -45,6 +45,9 @@
 
             <label>🔢 Cantidad Recibida:</label>
             <input type="number" name="cantidad" id="cantidad" min="1" required>
+            <label>🚨 Stock Crítico (solo para productos nuevos):</label>
+            <input type="number" name="stock_critico" id="stock_critico" min="0" placeholder="Ej: 10">
+
 
             <button type="submit" name="agregar_producto">➕ Agregar Producto</button>
         </form>
@@ -111,6 +114,10 @@
 }
 </style>
 
+
+
+
+
 <!-- Script para manejar productos existentes y nuevos -->
 <script>
     function filtrarProductos() {
@@ -160,7 +167,19 @@
         document.getElementById("stock_disponible").value = stockDisponible;
         document.getElementById("categoria").value = categoria;
     }
-    </script>
+        // Mostrar u ocultar el campo de stock_critico según si es nuevo o no
+    document.getElementById("producto_id").addEventListener("change", function () {
+        const esNuevo = this.value === "";
+        document.getElementById("stock_critico").parentElement.style.display = esNuevo ? "block" : "none";
+    });
+
+// Ejecutar al cargar por si hay un valor seleccionado
+    window.addEventListener("DOMContentLoaded", function () {
+        const select = document.getElementById("producto_id");
+        const esNuevo = select.value === "";
+        document.getElementById("stock_critico").parentElement.style.display = esNuevo ? "block" : "none";
+    });
+</script>
     
 
 {% endblock %}
