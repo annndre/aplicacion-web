@@ -15,46 +15,45 @@
             <input type="text" name="numero_guia"  value="{{ datos.get('numero_guia', '') }}">
 
             <label>📄 Número de Factura:</label>
-            <input type="text" name="numero_factura" value="{{ datos.get('numero_factura', '') }}">
+            <input type="text" name="numero_factura" value="{{ datos.get('numero_factura', '') }}" >
 
             <label>🔎 Buscar o Ingresar Producto:</label>
-            <input type="text" id="producto_nombre" name="producto_nombre" placeholder="Escribe o selecciona un producto" required oninput="sincronizarSeleccion(); filtrarProductos();">
-
-            <label>📋 Seleccionar Producto Existente (opcional):</label>
-            <select id="producto_id" onchange="actualizarDatosProducto()">
-                <option value="">Nuevo Producto</option>
+            <input type="text" id="producto_nombre" name="producto_nombre" placeholder="Escribe o selecciona un producto" oninput="filtrarProductos()" required>
+            <!-- Campo oculto para enviar el ID si existe -->
+            <input type="hidden" name="producto_id" id="producto_id">
+            
+            <label>📋 Seleccionar Producto Existente:</label>
+            <select id="producto_select" onchange="actualizarDatosProducto()">
+                <option value="">-- Seleccionar Producto --</option>
                 {% for producto in inventario %}
-                    <option value="{{ producto.id }}" 
-                            data-nombre="{{ producto.producto_nombre }}" 
-                            data-stock="{{ producto.stock_disponible }}" 
-                            data-categoria="{{ producto.categoria }}">
+                    <option 
+                        value="{{ producto.id }}"
+                        data-nombre="{{ producto.producto_nombre }}" 
+                        data-stock="{{ producto.stock_disponible }}" 
+                        data-categoria="{{ producto.categoria }}">
                         {{ producto.producto_nombre }} (Stock: {{ producto.stock_disponible }})
                     </option>
                 {% endfor %}
             </select>
 
             <label>📊 Stock Disponible:</label>
-            <input type="text" id="stock_disponible" disabled value="Nuevo producto">
-            
-            
-            <label>🏷️ Categoría del Producto:</label>
-            <input type="text" name="categoria" id="categoria" required>
+            <input type="text" id="stock_disponible" disabled>
+
+            <label>🏷️ Categoría:</label>
+            <input type="text" id="categoria" name="categoria" required>
 
             <label>📏 Unidad (un, kg, lt, etc.):</label>
             <input type="text" name="unidad" required>
 
-            <label>🔢 Cantidad Recibida:</label>
+            <label>🔢 Cantidad a Ingresar:</label>
             <input type="number" name="cantidad" id="cantidad" min="1" required>
-            <label>🚨 Stock Crítico (solo para productos nuevos):</label>
-            <input type="number" name="stock_critico" id="stock_critico" min="0" placeholder="Ej: 10">
-
 
             <button type="submit" name="agregar_producto">➕ Agregar Producto</button>
         </form>
     </div>
 
     <div class="lista-solicitudes">
-        <h3>📋 Productos Agregados</h3>
+        <h3>📋 Productos a Ingresar</h3>
         <ul class="productos-lista">
             {% for item in productos_temporales %}
                 <li>
@@ -114,72 +113,55 @@
 }
 </style>
 
-
-
-
-
-<!-- Script para manejar productos existentes y nuevos -->
+<!-- Script para autocompletar -->
 <script>
-    function filtrarProductos() {
-        const input = document.getElementById('producto_nombre').value.toLowerCase();
-        const select = document.getElementById('producto_id');
-        const opciones = select.options;
-    
-        for (let i = 0; i < opciones.length; i++) {
-            const nombreProducto = opciones[i].getAttribute('data-nombre') || '';
-            const match = nombreProducto.toLowerCase().includes(input);
-            opciones[i].style.display = match || opciones[i].value === '' ? "" : "none";
+function filtrarProductos() {
+    const input = document.getElementById('producto_nombre').value.toLowerCase();
+    const select = document.getElementById('producto_select');
+    const opciones = select.options;
+    let matchEncontrado = false;
+
+    for (let i = 0; i < opciones.length; i++) {
+        const nombreProducto = opciones[i].getAttribute('data-nombre') || '';
+        const match = nombreProducto.toLowerCase().includes(input);
+        opciones[i].style.display = match || opciones[i].value === '' ? "" : "none";
+
+        if (nombreProducto.toLowerCase() === input) {
+            select.value = opciones[i].value;
+            actualizarDatosProducto();
+            matchEncontrado = true;
         }
     }
-    
-    function sincronizarSeleccion() {
-        const nombreIngresado = document.getElementById('producto_nombre').value.toLowerCase();
-        const select = document.getElementById('producto_id');
-        const opciones = select.options;
-        let encontrado = false;
-    
-        for (let i = 0; i < opciones.length; i++) {
-            const nombreProducto = opciones[i].getAttribute('data-nombre') || '';
-            if (nombreProducto.toLowerCase() === nombreIngresado) {
-                select.value = opciones[i].value;
-                actualizarDatosProducto();
-                encontrado = true;
-                break;
-            }
-        }
-    
-        if (!encontrado) {
-            select.value = '';
-            document.getElementById("stock_disponible").value = "Nuevo producto";
-            document.getElementById("categoria").value = "";
-        }
+
+    if (!matchEncontrado) {
+        // Si es nuevo producto
+        document.getElementById("producto_select").value = "";
+        document.getElementById("producto_id").value = "";
+        document.getElementById("stock_disponible").value = "";
+        document.getElementById("categoria").value = "";
     }
-    
-    function actualizarDatosProducto() {
-        const select = document.getElementById("producto_id");
-        const selectedOption = select.options[select.selectedIndex];
-    
-        const productoNombre = selectedOption.getAttribute("data-nombre");
-        const stockDisponible = selectedOption.getAttribute("data-stock") || "Nuevo producto";
-        const categoria = selectedOption.getAttribute("data-categoria") || "";
-    
+}
+
+function actualizarDatosProducto() {
+    let select = document.getElementById("producto_select");
+    let selectedOption = select.options[select.selectedIndex];
+
+    if (selectedOption.value !== "") {
+        let productoNombre = selectedOption.getAttribute("data-nombre") || "";
+        let stockDisponible = selectedOption.getAttribute("data-stock") || "";
+        let categoria = selectedOption.getAttribute("data-categoria") || "";
+
         document.getElementById("producto_nombre").value = productoNombre;
         document.getElementById("stock_disponible").value = stockDisponible;
         document.getElementById("categoria").value = categoria;
+        document.getElementById("producto_id").value = selectedOption.value;
+    } else {
+        document.getElementById("producto_id").value = "";
+        document.getElementById("stock_disponible").value = "";
+        document.getElementById("categoria").value = "";
     }
-        // Mostrar u ocultar el campo de stock_critico según si es nuevo o no
-    document.getElementById("producto_id").addEventListener("change", function () {
-        const esNuevo = this.value === "";
-        document.getElementById("stock_critico").parentElement.style.display = esNuevo ? "block" : "none";
-    });
-
-// Ejecutar al cargar por si hay un valor seleccionado
-    window.addEventListener("DOMContentLoaded", function () {
-        const select = document.getElementById("producto_id");
-        const esNuevo = select.value === "";
-        document.getElementById("stock_critico").parentElement.style.display = esNuevo ? "block" : "none";
-    });
+}
 </script>
-    
+
 
 {% endblock %}

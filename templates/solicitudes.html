@@ -44,6 +44,13 @@
                 <option value="42">42 - Cinta de Lodos</option>
                 <option value="48">48 - Viña Sorepa</option>
             </select>
+            <label for="motivo">📌 Motivo:</label>
+            <select id="motivo" name="motivo" required>
+                <option value="">Seleccione</option>
+                <option value="consumo">Consumo</option>
+                <option value="devolucion">Devolución</option>
+            </select>
+            
 
             <button type="submit">➕ Agregar Producto</button>
         </form>
@@ -54,7 +61,7 @@
         <ul class="productos-lista">
             {% for item in datos.get('productos', []) %}
                 <li>
-                    {{ item.producto_nombre }} - {{ item.cantidad }} unidades (Centro de Costo: {{ item.centro_costo }})
+                    {{ item.producto_nombre }} - {{ item.cantidad }} unidades (Centro de Costo: {{ item.centro_costo }} | Motivo: {{ item.motivo }})
                     <a href="{{ url_for('eliminar_producto', index=loop.index0) }}" class="btn-eliminar">❌ Eliminar</a>
                 </li>
             {% endfor %}

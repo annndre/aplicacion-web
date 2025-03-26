@@ -24,7 +24,7 @@
     {% else %}
         <ul>
             {% for item in solicitud.productos %}
-                <li>{{ item.producto_nombre }} - {{ item.cantidad }} unidades (Centro de Costo: {{ item.centro_costo }})</li>
+                <li>{{ item.producto_nombre }} - {{ item.cantidad }} unidades (Centro de Costo: {{ item.centro_costo }}| Motivo: {{ item.motivo }})</li>
             {% endfor %}
         </ul>
     {% endif %}
