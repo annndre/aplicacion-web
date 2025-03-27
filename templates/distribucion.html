@@ -14,6 +14,15 @@
             <label>📍 Destino:</label>
             <input type="text" name="destino" required value="{{ datos.get('destino', '') }}">
 
+            <label>🏢 Centro de Costo:</label>
+                <select name="id_proyecto" required>
+                    <option value="">Selecciona un centro de costo</option>
+                    {% for proyecto in proyectos %}
+                        <option value="{{ proyecto.id_proyecto }}">{{ proyecto.id_proyecto }} - {{ proyecto.nombre_proyecto }}</option>
+                    {% endfor %}
+                </select>
+
+
             <label>🔎 Buscar o Ingresar Producto:</label>
             <input type="text" id="producto_nombre" name="producto_nombre" placeholder="Escribe o selecciona un producto" oninput="filtrarProductos()" required>
 
@@ -21,13 +30,19 @@
             <select id="producto_select" onchange="actualizarDatosProducto()">
                 <option value="">Seleccionar Producto</option>
                 {% for producto in inventario %}
-                    <option data-nombre="{{ producto.producto_nombre }}" 
+                    <option  value="{{ producto.producto_nombre }}"
+                    
+                            data-nombre="{{ producto.producto_nombre }}" 
                             data-stock="{{ producto.stock_disponible }}" 
-                            data-estado="{{ producto.estado }}">
-                        {{ producto.producto_nombre }} (Stock: {{ producto.stock_disponible }}, Estado: {{ producto.estado }})
+                            data-estado="{{ producto.estado }}"
+                            data-precio="{{ producto.precio_unitario }}">
+                            {{ producto.producto_nombre }} (Stock: {{ producto.stock_disponible }} | Estado: {{ "Operativo" if producto.estado == "OPERATIVO" else "NO OPERATIVO" }}| 
+                            💰 ${{ producto.precio_unitario }})
                     </option>
                 {% endfor %}
             </select>
+            
+
 
             <label>📊 Stock Disponible:</label>
             <input type="text" id="stock_disponible" disabled value="">
@@ -38,6 +53,10 @@
             <label>🔢 Cantidad a Distribuir:</label>
             <input type="number" name="cantidad" id="cantidad" min="1" required>
 
+            <label>💰 Precio Unitario:</label>
+            <input type="number" id="precio_unitario" disabled>
+
+
             <button type="submit" name="agregar_producto">➕ Agregar Producto</button>
         </form>
     </div>
@@ -47,13 +66,17 @@
         <ul class="productos-lista">
             {% for item in productos_temporales %}
                 <li>
-                    {{ item.producto_nombre }} - {{ item.cantidad }} unidades
+                    {{ item.producto_nombre }} - {{ item.cantidad }} unidades | 
+                    💰 Precio Unitario: ${{ "%.1f"|format(item.precio_unitario | float) }}| 
+                    📌 Total: ${{ "%.2f"|format((item.precio_unitario | float) * item.cantidad) }}
+                    <br>🏢 Centro de Costo: {{ item.centro_costo }}
                     <form method="POST" style="display:inline;">
                         <button type="submit" name="eliminar_producto" value="{{ loop.index0 }}">❌ Eliminar</button>
                     </form>
                 </li>
             {% endfor %}
         </ul>
+        
 
         {% if productos_temporales %}
             <form method="POST">
@@ -109,34 +132,42 @@ function filtrarProductos() {
     const select = document.getElementById('producto_select');
     const opciones = select.options;
 
-    for (let i = 0; i < opciones.length; i++) {
-        const nombreProducto = opciones[i].getAttribute('data-nombre') || '';
-        const match = nombreProducto.toLowerCase().includes(input);
+    let coincidencias = [];
 
-        opciones[i].style.display = match || opciones[i].value === '' ? "" : "none";
+    for (let i = 0; i < opciones.length; i++) {
+        const nombreProducto = opciones[i].getAttribute('data-nombre')?.toLowerCase() || '';
+        const visible = nombreProducto.includes(input);
+
+        opciones[i].hidden = !visible && opciones[i].value !== "";
+
+        if (visible && opciones[i].value !== "") {
+            coincidencias.push(opciones[i]);
+        }
     }
 
-    // ⚠️ Aquí ya NO se autocompleta el campo "producto_nombre"
-    // Solo se filtran opciones visibles en el <select>
+    if (coincidencias.length === 1) {
+        select.value = coincidencias[0].value;
+        actualizarDatosProducto();
+    } else {
+        select.value = "";
+        document.getElementById("producto_id").value = "";
+        document.getElementById("stock_disponible").value = "";
+        document.getElementById("estado").value = "";
+        document.getElementById("precio_unitario").value = "";
+    }
 }
 
 function actualizarDatosProducto() {
-    let select = document.getElementById("producto_select");
-    let selectedOption = select.options[select.selectedIndex];
+    const select = document.getElementById("producto_select");
+    const selectedOption = select.options[select.selectedIndex];
 
     if (selectedOption.value !== "") {
-        // ✅ Solo autocompleta cuando se selecciona desde el combo
-        let productoNombre = selectedOption.getAttribute("data-nombre") || "";
-        let stockDisponible = selectedOption.getAttribute("data-stock") || "";
-        let estadoProducto = selectedOption.getAttribute("data-estado") || "";
-
-        document.getElementById("producto_nombre").value = productoNombre;
-        document.getElementById("stock_disponible").value = stockDisponible;
-        document.getElementById("estado").value = estadoProducto;
-    } else {
-        // Limpiar campos si vuelve a "Seleccionar Producto"
-        document.getElementById("stock_disponible").value = "";
-        document.getElementById("estado").value = "";
+        document.getElementById("producto_nombre").value = selectedOption.getAttribute("data-nombre") || "";
+        document.getElementById("stock_disponible").value = selectedOption.getAttribute("data-stock") || "";
+        document.getElementById("estado").value = selectedOption.getAttribute("data-estado") || "";
+        const precio = selectedOption.getAttribute("data-precio") || "";
+        document.getElementById("precio_unitario").value = precio ? parseFloat(precio): "";
+        document.getElementById("producto_id").value = selectedOption.value;
     }
 }
 </script>

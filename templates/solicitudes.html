@@ -24,8 +24,9 @@
                 <option value="">Seleccione un producto</option>
                 {% for producto in inventario %}
                     <option value="{{ producto.id }}" data-nombre="{{ producto.producto_nombre }}" 
-                            data-stock="{{ producto.stock_disponible }}" data-estado="{{ producto.estado }}">
-                        {{ producto.producto_nombre }} (Stock: {{ producto.stock_disponible }} | Estado: {{ "Operativo" if producto.estado == "OPERATIVO" else "NO OPERATIVO" }})
+                            data-stock="{{ producto.stock_disponible }}" data-estado="{{ producto.estado }}" data-precio="{{ producto.precio_unitario }}" data-precio="{{ producto.precio_unitario }}">
+                        {{ producto.producto_nombre }} (Stock: {{ producto.stock_disponible }} | Estado: {{ "Operativo" if producto.estado == "OPERATIVO" else "NO OPERATIVO" }}| 
+                        💰 ${{ producto.precio_unitario }})
                     </option>
                 {% endfor %}
             </select>
@@ -37,13 +38,19 @@
 
             <label>📊 Cantidad:</label>
             <input type="number" name="cantidad" id="cantidad" min="1" required>
+            <label>💰 Precio Unitario:</label>
+            <input type="text" id="precio_unitario" disabled>
+
 
             <label>🏢 Centro de Costo:</label>
-            <select name="centro_costo" required>
-                <option value="40">40 - Mejoramiento Sanitario</option>
-                <option value="42">42 - Cinta de Lodos</option>
-                <option value="48">48 - Viña Sorepa</option>
+            <select name="id_proyecto" required>
+                <option value="">Selecciona un centro de costo</option>
+                {% for proyecto in proyectos %}
+                    <option value="{{ proyecto.id_proyecto }}">{{ proyecto.id_proyecto }} - {{ proyecto.nombre_proyecto }}</option>
+                {% endfor %}
             </select>
+
+            
             <label for="motivo">📌 Motivo:</label>
             <select id="motivo" name="motivo" required>
                 <option value="">Seleccione</option>
@@ -61,11 +68,18 @@
         <ul class="productos-lista">
             {% for item in datos.get('productos', []) %}
                 <li>
-                    {{ item.producto_nombre }} - {{ item.cantidad }} unidades (Centro de Costo: {{ item.centro_costo }} | Motivo: {{ item.motivo }})
+                    <div>
+                        <strong>{{ item.producto_nombre }}</strong><br>
+                        Cantidad: {{ item.cantidad }}<br>
+                        Precio Unitario: ${{ item.precio_unitario }}<br>
+                        💰 Total: ${{ item.precio }}<br>
+                        🏢 Centro de Costo: {{ item.centro_costo }} | 📌 Motivo: {{ item.motivo }}
+                    </div>
                     <a href="{{ url_for('eliminar_producto', index=loop.index0) }}" class="btn-eliminar">❌ Eliminar</a>
                 </li>
             {% endfor %}
         </ul>
+        
 
         {% if datos.get('productos') %}
             <form method="GET" action="{{ url_for('confirmar_solicitud') }}">
@@ -156,9 +170,11 @@ function actualizarStockDisponible() {
     let selectedOption = document.getElementById("producto_id").options[document.getElementById("producto_id").selectedIndex];
     let stockDisponible = selectedOption.getAttribute("data-stock") || "0";
     let estadoProducto = selectedOption.getAttribute("data-estado") || "Desconocido";
+    let precioUnitario = selectedOption.getAttribute("data-precio") || "";
 
     document.getElementById("stock_disponible").value = stockDisponible;
     document.getElementById("estado_producto").value = estadoProducto;
+    document.getElementById("precio_unitario").value = precioUnitario ? `$${parseFloat(precioUnitario).toFixed(2)}` : "";
     document.getElementById("cantidad").setAttribute("max", stockDisponible);
 }
 </script>

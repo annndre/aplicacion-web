@@ -30,6 +30,9 @@
                 <tr>
                     <th>Producto</th>
                     <th>Cantidad</th>
+                    <th>Precio Unitario</th>
+                    <th>Total</th>
+                    <th>Centro de Costo</th>
                     <th>Acción</th>
                 </tr>
             </thead>
@@ -38,6 +41,10 @@
                 <tr>
                     <td>{{ producto.producto_nombre }}</td>
                     <td>{{ producto.cantidad }}</td>
+                    <td>${{ "%.2f"|format(producto.precio_unitario) }}</td>
+                    <td>${{ "%.2f"|format(producto.precio_unitario * producto.cantidad) }}</td>
+                    <td>{{ producto.centro_costo }}</td>
+
                     <td>
                         <form method="POST" style="display:inline;">
                             <button type="submit" name="eliminar_producto" value="{{ loop.index0 }}">❌ Eliminar</button>
@@ -47,6 +54,12 @@
                 {% endfor %}
             </tbody>
         </table>
+        {% set total_general = productos_temporales | sum(attribute='precio') %}
+
+        <p style="margin-top: 10px;">
+            <strong>💰 Total General de la Distribución:</strong> ${{ total_general }}
+        </p>
+
         {% else %}
             <p>No hay productos agregados aún.</p>
         {% endif %}

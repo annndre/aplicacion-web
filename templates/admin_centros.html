@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Administrar Centros de Costo{% endblock %}
+
+{% block content %}
+<h2>➕ Agregar Centro de Costo</h2>
+<form method="POST">
+    <label>ID Proyecto:</label>
+    <input type="number" name="id_proyecto" required>
+
+    <label>Nombre del Proyecto:</label>
+    <input type="text" name="nombre_proyecto" required>
+
+    <button type="submit">Agregar</button>
+</form>
+
+<hr>
+
+<h3>📋 Centros de Costo Registrados</h3>
+<ul>
+    {% for centro in centros %}
+        <li>{{ centro.id_proyecto }} - {{ centro.nombre_proyecto }}</li>
+    {% endfor %}
+</ul>
+{% endblock %}

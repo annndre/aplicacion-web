@@ -77,12 +77,16 @@ def solicitudes():
         cursor.execute("SELECT * FROM productos")
         inventario = cursor.fetchall()
 
+        cursor.execute("SELECT id_proyecto, nombre_proyecto FROM centros_costo ORDER BY id_proyecto")
+        proyectos = cursor.fetchall()
+
+
     if request.method == 'POST':
         nombre_solicitante = request.form['nombre_solicitante']
         rut_solicitante = request.form['rut_solicitante']
         producto_id = request.form['producto_id']
         cantidad = int(request.form['cantidad'])
-        centro_costo = request.form['centro_costo']
+        id_proyecto = request.form['id_proyecto']
         motivo = request.form['motivo']
 
 
@@ -92,10 +96,11 @@ def solicitudes():
             return redirect(url_for('solicitudes'))
 
         with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-            cursor.execute("SELECT producto_nombre, estado FROM productos WHERE id = %(id)s", {'id': producto_id})
+            cursor.execute("SELECT producto_nombre, estado, precio_unitario FROM productos WHERE id = %(id)s", {'id': producto_id})
             producto = cursor.fetchone()
             producto_nombre = producto['producto_nombre'] if producto else "Desconocido"
             estado_producto = producto['estado'] if producto else "Desconocido"
+            precio_unitario = producto['precio_unitario'] if producto else "Desconocido"
                 # ⛔ Validación para bloquear productos no operativos
             if estado_producto.lower().strip() != 'operativo':
                flash(f'❌ El producto "{producto_nombre}" no se puede agregar porque no está operativo.')
@@ -108,12 +113,18 @@ def solicitudes():
                 'productos': []
             }
 
+        # Buscar el nombre del proyecto en la lista de proyectos
+        nombre_proyecto = next((p['nombre_proyecto'] for p in proyectos if str(p['id_proyecto']) == id_proyecto), "Desconocido")
+   
+        total_precio = round(precio_unitario * cantidad)
         session['solicitud_temporal']['productos'].append({
             'producto_id': producto_id,
             'producto_nombre': producto_nombre,
             'cantidad': cantidad,
-            'centro_costo': centro_costo,
-            'motivo': motivo
+            'centro_costo': f"{id_proyecto} - {nombre_proyecto}",
+            'motivo': motivo,
+            'precio_unitario': precio_unitario,
+            'precio': total_precio
         })
 
         flash(f'Producto {producto_nombre} agregado.')
@@ -122,7 +133,8 @@ def solicitudes():
         return redirect(url_for('solicitudes'))
 
     datos = session.get('solicitud_temporal', {})
-    return render_template('solicitudes.html', inventario=inventario, datos=datos)
+    return render_template('solicitudes.html', inventario=inventario, datos=datos, proyectos=proyectos)
+
 
 @app.route('/eliminar_producto/<int:index>')
 def eliminar_producto(index):
@@ -179,8 +191,8 @@ def confirmar_solicitud():
                     # Registrar en historial de solicitudes
                     cursor.execute("""
                         INSERT INTO historial_solicitudes 
-                        (nombre_solicitante, rut_solicitante, producto_id, producto_nombre, cantidad, centro_costo, motivo, usuario)
-                        VALUES (%(nombre_solicitante)s, %(rut_solicitante)s, %(producto_id)s, %(producto_nombre)s, %(cantidad)s, %(centro_costo)s, %(motivo)s, %(usuario)s)
+                        (nombre_solicitante, rut_solicitante, producto_id, producto_nombre, cantidad, centro_costo, motivo, usuario, precio)
+                        VALUES (%(nombre_solicitante)s, %(rut_solicitante)s, %(producto_id)s, %(producto_nombre)s, %(cantidad)s, %(centro_costo)s, %(motivo)s, %(usuario)s, %(precio)s)
                     """, {
                         'nombre_solicitante': datos['nombre_solicitante'],
                         'rut_solicitante': datos['rut_solicitante'],
@@ -189,7 +201,8 @@ def confirmar_solicitud():
                         'cantidad': item['cantidad'],
                         'centro_costo': item['centro_costo'],
                         'motivo': item['motivo'],
-                        'usuario': usuario
+                        'usuario': usuario,
+                        'precio': item['precio'],
 
                     })
                     print("DEBUG MOTIVO:", item.get('motivo'))
@@ -336,12 +349,13 @@ def entradas():
             categoria = request.form.get('categoria', '').strip()
             try:
                 cantidad = int(request.form.get('cantidad', 0))
+                precio_unitario = float(request.form.get('precio_unitario', 0))
             except ValueError:
-                flash("⚠️ La cantidad debe ser un número entero.", "error")
+                flash("⚠️ La cantidad y el precio unitario deben ser números válidos.", "error")
                 return redirect(url_for('entradas'))
 
-            if not producto_nombre or cantidad <= 0:
-                flash('⚠️ Error: Debes ingresar un nombre de producto y una cantidad válida.', 'error')
+            if not producto_nombre or cantidad <= 0 or precio_unitario <= 0:
+                flash('⚠️ Error: Debes ingresar un nombre de producto, una cantidad y un precio unitario válidos.', 'error')
                 return redirect(url_for('entradas'))
 
             conexion = obtener_conexion()
@@ -351,10 +365,10 @@ def entradas():
                 else:
                     # 🔽 Producto nuevo: lo insertamos
                     cursor.execute("""
-                        INSERT INTO productos (producto_nombre, stock_disponible, unidad, categoria)
-                        VALUES (%s, %s, %s, %s)
+                        INSERT INTO productos (producto_nombre, stock_disponible, unidad, categoria, precio_unitario)
+                        VALUES (%s, %s, %s, %s, %s)
                         RETURNING id
-                    """, (producto_nombre, cantidad, unidad, categoria))
+                    """, (producto_nombre, cantidad, unidad, categoria, precio_unitario))
                     producto_id = cursor.fetchone()[0]
                     conexion.commit()
                     flash(f"🆕 Producto nuevo agregado: {producto_nombre}", "info")
@@ -364,11 +378,13 @@ def entradas():
                 'producto_nombre': producto_nombre,
                 'cantidad': cantidad,
                 'unidad': unidad,
-                'categoria': categoria
+                'categoria': categoria,
+                'precio_unitario': precio_unitario
             })
 
             session.modified = True
-            flash(f'✅ Producto agregado: {producto_nombre} - Cantidad: {cantidad}', 'success')
+            flash(f'✅ Producto agregado: {producto_nombre} - Cantidad: {cantidad} - Precio Unitario: ${precio_unitario:.2f}', 'success')
+
             return redirect(url_for('entradas'))
 
         elif 'eliminar_producto' in request.form:
@@ -402,18 +418,20 @@ def entradas():
                         cantidad = producto['cantidad']
                         unidad = producto['unidad']
                         categoria = producto['categoria']
+                        precio_unitario = producto['precio_unitario']
+
 
                         cursor.execute("""
                             UPDATE productos 
-                            SET stock_disponible = stock_disponible + %s 
+                            SET stock_disponible = stock_disponible + %s, precio_unitario = %s
                             WHERE id = %s
-                        """, (cantidad, producto_id))
+                        """, (cantidad, precio_unitario, producto_id))
 
                         cursor.execute("""
                             INSERT INTO historial_entradas 
-                            (numero_orden, numero_guia, numero_factura, producto_id, producto_nombre, cantidad, unidad, categoria, usuario) 
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """, (numero_orden, numero_guia, numero_factura, producto_id, producto_nombre, cantidad, unidad, categoria, usuario))
+                            (numero_orden, numero_guia, numero_factura, producto_id, producto_nombre, cantidad, unidad, categoria, precio_unitario, usuario) 
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (numero_orden, numero_guia, numero_factura, producto_id, producto_nombre, cantidad, unidad, categoria, precio_unitario, usuario))
 
                 conexion.commit()
                 flash('✅ Entrada confirmada y registrada exitosamente.', 'success')
@@ -455,8 +473,11 @@ def distribucion():
 
     conexion = obtener_conexion()
     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-        cursor.execute("SELECT producto_nombre, stock_disponible, unidad, categoria, estado FROM productos")
+        cursor.execute("SELECT producto_nombre, stock_disponible, unidad, categoria, precio_unitario, estado FROM productos")
         inventario = cursor.fetchall()
+        cursor.execute("SELECT id_proyecto, nombre_proyecto FROM centros_costo ORDER BY id_proyecto")
+        proyectos = cursor.fetchall()
+
 
     if 'distribucion_temporal' not in session:
         session['distribucion_temporal'] = {
@@ -472,6 +493,12 @@ def distribucion():
 
             producto_nombre = request.form.get("producto_nombre", "").strip()
             cantidad = request.form.get("cantidad", "").strip()
+            id_proyecto = request.form.get("id_proyecto", "").strip()
+
+            nombre_proyecto = next(
+                (p['nombre_proyecto'] for p in proyectos if str(p['id_proyecto']) == id_proyecto),
+                "Desconocido"
+)
 
             if not producto_nombre or not cantidad.isdigit() or int(cantidad) <= 0:
                 flash('⚠️ Error: Debes ingresar un nombre de producto y cantidad válida.', 'error')
@@ -481,7 +508,7 @@ def distribucion():
 
             with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
                 cursor.execute("""
-                    SELECT stock_disponible, estado 
+                    SELECT stock_disponible, estado, precio_unitario
                     FROM productos 
                     WHERE LOWER(TRIM(producto_nombre)) = LOWER(TRIM(%s))
                 """, (producto_nombre,))
@@ -499,10 +526,15 @@ def distribucion():
                 if cantidad > producto_existente['stock_disponible']:
                     flash(f'⚠️ Error: Stock insuficiente para {producto_nombre}.', 'error')
                     return redirect(url_for('distribucion'))
+                
+                precio_unitario = float(producto_existente['precio_unitario'])
+
 
             session['distribucion_temporal']['productos'].append({
                 'producto_nombre': producto_nombre,
-                'cantidad': cantidad
+                'cantidad': cantidad,
+                'precio_unitario': precio_unitario,
+                'centro_costo': f"{id_proyecto} - {nombre_proyecto}"
             })
             session.modified = True
             flash(f'✅ Producto agregado a la distribución: {producto_nombre} - Cantidad: {cantidad}', 'success')
@@ -532,6 +564,8 @@ def distribucion():
                 for producto in session['distribucion_temporal']['productos']:
                     producto_nombre = producto['producto_nombre']
                     cantidad = producto['cantidad']
+                    precio_unitario = producto['precio_unitario']
+                    precio_total = precio_unitario * cantidad
                     
 
                       # 🔹 Verificar el stock actual en la base de datos
@@ -554,9 +588,9 @@ def distribucion():
             
                     cursor.execute("""
                         INSERT INTO historial_distribucion 
-                        (numero_guia, producto_nombre, cantidad, destino, usuario) 
-                        VALUES (%s, %s, %s, %s, %s)
-                    """, (numero_guia, producto_nombre, cantidad, destino, usuario))
+                        (numero_guia, producto_nombre, cantidad, destino, usuario, precio, centro_costo) 
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (numero_guia, producto_nombre, cantidad, destino, usuario, precio_total, producto['centro_costo']))
                 
                 conexion.commit()
                 flash('✅ Distribución confirmada y registrada exitosamente.', 'success')
@@ -573,8 +607,36 @@ def distribucion():
         'distribucion.html', 
         inventario=inventario, 
         productos_temporales=session['distribucion_temporal']['productos'],
-        datos=session['distribucion_temporal']
+        datos=session['distribucion_temporal'],
+        proyectos=proyectos
     )
+
+@app.route('/admin/centros-costo', methods=['GET', 'POST'])
+def gestionar_centros_costo():
+    if 'usuario' not in session or session.get('rol') != 'admin':
+        flash("Acceso restringido", "danger")
+        return redirect(url_for('login'))
+
+    conexion = obtener_conexion()
+    with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+        if request.method == 'POST':
+            id_proyecto = request.form['id_proyecto'].strip()
+            nombre = request.form['nombre_proyecto'].strip()
+
+            if not id_proyecto.isdigit() or not nombre:
+                flash("⚠️ Debes ingresar un ID numérico y un nombre de proyecto válido.", "danger")
+                return redirect(url_for('gestionar_centros_costo'))
+
+            cursor.execute("INSERT INTO centros_costo (id_proyecto, nombre_proyecto) VALUES (%s, %s) ON CONFLICT (id_proyecto) DO NOTHING", 
+                           (int(id_proyecto), nombre))
+            conexion.commit()
+            flash("✅ Centro de costo agregado con éxito", "success")
+
+        cursor.execute("SELECT id_proyecto, nombre_proyecto FROM centros_costo ORDER BY id_proyecto")
+        centros = cursor.fetchall()
+
+    return render_template('admin_centros.html', centros=centros)
+
 
 #######################################################################################################################
 @app.route('/logout')

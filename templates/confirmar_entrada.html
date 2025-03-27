@@ -36,6 +36,7 @@
                     <th>Cantidad</th>
                     <th>Unidad</th>
                     <th>Categoría</th>
+                    <th>Precio Unitario</th>
                     <th>Estado</th>
                     <th>Acción</th>
                 </tr>
@@ -47,6 +48,8 @@
                     <td>{{ producto.cantidad }}</td>
                     <td>{{ producto.unidad }}</td>
                     <td>{{ producto.categoria }}</td>
+                    <td>${{ producto.precio_unitario }}</td>
+                    
                     <td>
                         {% if producto.nuevo %}
                             <div style="color: green;">

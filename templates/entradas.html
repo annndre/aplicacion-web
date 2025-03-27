@@ -47,6 +47,9 @@
 
             <label>🔢 Cantidad a Ingresar:</label>
             <input type="number" name="cantidad" id="cantidad" min="1" required>
+            <label>💰 Precio Unitario:</label>
+            <input type="number" step="0.1" min="0" name="precio_unitario" required>
+
 
             <button type="submit" name="agregar_producto">➕ Agregar Producto</button>
         </form>
@@ -57,7 +60,7 @@
         <ul class="productos-lista">
             {% for item in productos_temporales %}
                 <li>
-                    {{ item.producto_nombre }} - {{ item.cantidad }} unidades ({{ item.unidad }})
+                    {{ item.producto_nombre }} - {{ item.cantidad }} unidades ({{ item.unidad }} - 💰 ${{ item.precio_unitario }})
                     <form method="POST" style="display:inline;">
                         <button type="submit" name="eliminar_producto" value="{{ loop.index0 }}">❌ Eliminar</button>
                     </form>

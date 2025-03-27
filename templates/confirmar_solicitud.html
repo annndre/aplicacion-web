@@ -24,9 +24,16 @@
     {% else %}
         <ul>
             {% for item in solicitud.productos %}
-                <li>{{ item.producto_nombre }} - {{ item.cantidad }} unidades (Centro de Costo: {{ item.centro_costo }}| Motivo: {{ item.motivo }})</li>
+                <li>
+                    <strong>{{ item.producto_nombre }}</strong><br>
+                    Cantidad: {{ item.cantidad }}<br>
+                    Precio Unitario: ${{ item.precio_unitario }}<br>
+                    💰 Total: ${{ item.precio }}<br>
+                    🏢 Centro de Costo: {{ item.centro_costo }} | 📌 Motivo: {{ item.motivo }}
+                </li>
             {% endfor %}
         </ul>
+    
     {% endif %}
 
     <form method="POST">
