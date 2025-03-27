@@ -379,7 +379,9 @@ def entradas():
                 'cantidad': cantidad,
                 'unidad': unidad,
                 'categoria': categoria,
-                'precio_unitario': precio_unitario
+                'precio_unitario': precio_unitario,
+                'es_nuevo': not producto_id_form  # Agrega esta línea
+
             })
 
             session.modified = True
@@ -421,11 +423,20 @@ def entradas():
                         precio_unitario = producto['precio_unitario']
 
 
-                        cursor.execute("""
-                            UPDATE productos 
-                            SET stock_disponible = stock_disponible + %s, precio_unitario = %s
-                            WHERE id = %s
-                        """, (cantidad, precio_unitario, producto_id))
+                        if not producto.get('es_nuevo'):
+                        # Solo si el producto no es nuevo, sumamos stock
+                            cursor.execute("""
+                                UPDATE productos 
+                                SET stock_disponible = stock_disponible + %s, precio_unitario = %s
+                                WHERE id = %s
+                            """, (cantidad, precio_unitario, producto_id))
+                        else:
+    # Si es nuevo, solo actualizamos el precio si hace falta
+                            cursor.execute("""
+                                UPDATE productos 
+                                SET precio_unitario = %s
+                                WHERE id = %s
+                            """, (precio_unitario, producto_id))
 
                         cursor.execute("""
                             INSERT INTO historial_entradas 
