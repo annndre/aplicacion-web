@@ -79,6 +79,14 @@ def solicitudes():
 
         cursor.execute("SELECT id_proyecto, nombre_proyecto FROM centros_costo ORDER BY id_proyecto")
         proyectos = cursor.fetchall()
+            # 🚨 Consulta para productos con alerta de stock
+        cursor.execute("""
+            SELECT producto_nombre, stock_disponible, stock_critico
+            FROM productos
+            WHERE stock_disponible <= stock_critico
+        """)
+        alertas_stock = cursor.fetchall()
+
 
 
     if request.method == 'POST':
@@ -133,7 +141,7 @@ def solicitudes():
         return redirect(url_for('solicitudes'))
 
     datos = session.get('solicitud_temporal', {})
-    return render_template('solicitudes.html', inventario=inventario, datos=datos, proyectos=proyectos)
+    return render_template('solicitudes.html', inventario=inventario, datos=datos, proyectos=proyectos, alertas_stock=alertas_stock)
 
 
 @app.route('/eliminar_producto/<int:index>')

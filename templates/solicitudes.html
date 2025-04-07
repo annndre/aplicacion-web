@@ -50,7 +50,7 @@
                 {% endfor %}
             </select>
 
-            
+
             <label for="motivo">📌 Motivo:</label>
             <select id="motivo" name="motivo" required>
                 <option value="">Seleccione</option>
@@ -95,6 +95,35 @@
                 {% endfor %}
             {% endwith %}
         </ul>
+        <!-- 🚨 Mini tabla con productos en stock crítico -->
+<div class="mini-tabla-stock">
+    <h4>📉 Productos con Stock Crítico</h4>
+    <div class="tabla-scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Stock Disponible</th>
+                    <th>Stock Crítico</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alerta in alertas_stock %}
+                <tr>
+                    <td>{{ alerta.producto_nombre }}</td>
+                    <td>{{ alerta.stock_disponible }}</td>
+                    <td>{{ alerta.stock_critico }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3" style="text-align: center;">No hay productos críticos</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
     </div>
 </div>
 
@@ -142,6 +171,36 @@
     padding: 20px;
     font-size: 18px;
 }
+.mini-tabla-stock {
+    margin-top: 20px;
+}
+
+.tabla-scroll {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+}
+
+.tabla-scroll table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.tabla-scroll th, .tabla-scroll td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+.tabla-scroll th {
+    background-color: #f2f2f2;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
 </style>
 
 <!-- Script para filtrar productos y verificar stock -->
