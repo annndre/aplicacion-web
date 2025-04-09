@@ -337,6 +337,17 @@ def confirmar_devolucion():
                     devolucion['fecha'],
                     usuario_actual
                 ))
+                # 2. Actualizar stock_disponible en la tabla productos
+                cursor.execute("""
+                    UPDATE productos
+                    SET stock_disponible = stock_disponible + %s
+                    WHERE id = %s
+                """, (
+                    devolucion['cantidad'],
+                    devolucion['producto_id']
+                ))
+
+
             cursor.execute("DELETE FROM devoluciones_pendientes WHERE id = %s", (id_,))
     conexion.commit()
 
