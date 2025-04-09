@@ -314,10 +314,29 @@ def confirmar_devolucion():
     if not ids:
         flash("⚠️ Debes seleccionar al menos un producto para devolver.", "warning")
         return redirect(url_for('devoluciones'))
+    usuario_actual = session.get('usuario')
 
     conexion = obtener_conexion()
-    with conexion.cursor() as cursor:
+    with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
         for id_ in ids:
+            # Obtener los datos antes de eliminar
+            cursor.execute("SELECT * FROM devoluciones_pendientes WHERE id = %s", (id_,))
+            devolucion = cursor.fetchone()
+            if devolucion:
+                # Insertar en historial_devoluciones
+                cursor.execute("""
+                    INSERT INTO historial_devoluciones 
+                    (nombre_devolutor, rut_devolutor, producto_id, producto_nombre, cantidad, fecha_devolucion, usuario)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    devolucion['nombre_solicitante'],
+                    devolucion['rut_solicitante'],
+                    devolucion['producto_id'],
+                    devolucion['producto_nombre'],
+                    devolucion['cantidad'],
+                    devolucion['fecha'],
+                    usuario_actual
+                ))
             cursor.execute("DELETE FROM devoluciones_pendientes WHERE id = %s", (id_,))
     conexion.commit()
 
