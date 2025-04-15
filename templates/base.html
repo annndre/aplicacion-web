@@ -112,6 +112,8 @@
         <a href="{{ url_for('distribucion') }}">🚚 Distribución</a>
         <a href="{{ url_for('ver_inventario') }}">📦 Inventario</a>
         <a href="{{ url_for('gestionar_centros_costo') }}">⚙️ Centros de Costo</a>
+        <a href="{{ url_for('adquisiciones') }}">🗂️ adquisiciones</a>
+
 
     {% elif session['rol'] == 'inventario' %}
         <a href="{{ url_for('ver_inventario') }}">📦 Inventario</a>

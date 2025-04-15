@@ -688,6 +688,93 @@ def gestionar_centros_costo():
 
 
 #######################################################################################################################
+@app.route('/adquisiciones', methods=['GET', 'POST'])
+def adquisiciones():
+    if 'usuario' not in session or session.get('rol') != 'admin':
+        flash("⚠️ Acceso restringido", "danger")
+        return redirect(url_for('login'))
+
+    conexion = obtener_conexion()
+
+    if request.method == 'POST' and 'confirmar_adquisiciones' in request.form:
+        numero_oc = request.form.get('numero_oc', '').strip()
+        centro_costo = request.form.get('centro_costo', '').strip()
+
+        fecha_factura = request.form.get('fecha_factura', '').strip() or None
+        numero_factura = request.form.get('numero_factura', '').strip() or None
+        rut_proveedor = request.form.get('rut_proveedor', '').strip() or None
+        nombre_proveedor = request.form.get('nombre_proveedor', '').strip() or None
+        registro_compra = request.form.get('registro_compra', '').strip() or None
+
+        try:
+            monto_factura_raw = request.form.get('monto_factura', '').strip()
+            monto_factura = int(monto_factura_raw) if monto_factura_raw else None
+        except ValueError:
+            flash("⚠️ El monto debe ser un número entero válido.", "error")
+            return redirect(url_for('adquisiciones'))
+
+        if not numero_oc or not centro_costo:
+            flash("⚠️ Debes ingresar al menos el Número de OC y Centro de Costo.", "error")
+            return redirect(url_for('adquisiciones'))
+
+        with conexion.cursor() as cursor:
+            if any([fecha_factura, numero_factura, rut_proveedor, nombre_proveedor, registro_compra, monto_factura]):
+                cursor.execute("""
+                    INSERT INTO registroOC (
+                        numero_oc, centro_costo, fecha_factura, numero_factura,
+                        rut_proveedor, nombre_proveedor, registro_compra, monto_factura
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    numero_oc, centro_costo, fecha_factura, numero_factura,
+                    rut_proveedor, nombre_proveedor, registro_compra, monto_factura
+                ))
+            else:
+                cursor.execute("""
+                    INSERT INTO standbyOC (numero_oc, centro_costo)
+                    VALUES (%s, %s)
+                """, (numero_oc, centro_costo))
+
+            conexion.commit()
+
+        flash("✅ Orden de Compra registrada correctamente.", "success")
+        return redirect(url_for('adquisiciones'))
+
+    # Mostrar datos de las tablas
+    with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+        # Datos tabla registroOC
+        cursor.execute("""
+            SELECT numero_oc, centro_costo, fecha_factura, numero_factura, 
+                   registro_compra, monto_factura
+            FROM registroOC
+            ORDER BY fecha_registro DESC
+        """)
+        adquisiciones_guardadas = cursor.fetchall()
+
+        # Datos tabla standbyOC
+        cursor.execute("""
+            SELECT numero_oc, centro_costo, fecha_registro
+            FROM standbyOC
+            ORDER BY fecha_registro DESC
+        """)
+        adquisiciones_en_espera = cursor.fetchall()
+
+        # Centros de costo
+        cursor.execute("""
+            SELECT id_proyecto, nombre_proyecto
+            FROM centros_costo
+            ORDER BY id_proyecto ASC
+        """)
+        centros_costo = cursor.fetchall()
+
+    return render_template('adquisiciones.html',
+                       historial_adquisiciones=adquisiciones_guardadas,
+                       oc_espera_factura=adquisiciones_en_espera,
+                       centros_costo=centros_costo)
+
+
+########################################################################################################
+
 @app.route('/logout')
 def logout():
     session.pop('usuario', None)
