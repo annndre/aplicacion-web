@@ -706,11 +706,20 @@ def adquisiciones():
         nombre_proveedor = request.form.get('nombre_proveedor', '').strip() or None
         registro_compra = request.form.get('registro_compra', '').strip() or None
 
+        # Capturar y validar Monto Factura
         try:
             monto_factura_raw = request.form.get('monto_factura', '').strip()
             monto_factura = int(monto_factura_raw) if monto_factura_raw else None
         except ValueError:
-            flash("⚠️ El monto debe ser un número entero válido.", "error")
+            flash("⚠️ El monto de la factura debe ser un número entero válido.", "error")
+            return redirect(url_for('adquisiciones'))
+
+        # Capturar y validar Monto OC
+        try:
+            monto_oc_raw = request.form.get('monto_oc', '').strip()
+            monto_oc = int(monto_oc_raw) if monto_oc_raw else None
+        except ValueError:
+            flash("⚠️ El monto de la OC debe ser un número entero válido.", "error")
             return redirect(url_for('adquisiciones'))
 
         if not numero_oc or not centro_costo:
@@ -718,48 +727,52 @@ def adquisiciones():
             return redirect(url_for('adquisiciones'))
 
         with conexion.cursor() as cursor:
+            # Si tiene datos de factura → insertar en registroOC y eliminar de standbyOC si existía
             if any([fecha_factura, numero_factura, rut_proveedor, nombre_proveedor, registro_compra, monto_factura]):
+                cursor.execute("DELETE FROM standbyOC WHERE numero_oc = %s", (numero_oc,))
+
                 cursor.execute("""
                     INSERT INTO registroOC (
                         numero_oc, centro_costo, fecha_factura, numero_factura,
-                        rut_proveedor, nombre_proveedor, registro_compra, monto_factura
+                        rut_proveedor, nombre_proveedor, registro_compra, monto_factura, monto_oc
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     numero_oc, centro_costo, fecha_factura, numero_factura,
-                    rut_proveedor, nombre_proveedor, registro_compra, monto_factura
+                    rut_proveedor, nombre_proveedor, registro_compra, monto_factura, monto_oc
                 ))
             else:
+                # Si no tiene datos de factura → insertar en standbyOC
                 cursor.execute("""
-                    INSERT INTO standbyOC (numero_oc, centro_costo)
-                    VALUES (%s, %s)
-                """, (numero_oc, centro_costo))
+                    INSERT INTO standbyOC (numero_oc, centro_costo, monto_oc)
+                    VALUES (%s, %s, %s)
+                """, (numero_oc, centro_costo, monto_oc))
 
             conexion.commit()
 
         flash("✅ Orden de Compra registrada correctamente.", "success")
         return redirect(url_for('adquisiciones'))
 
-    # Mostrar datos de las tablas
+    # Mostrar datos en la vista adquisiciones.html
     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-        # Datos tabla registroOC
+        # Historial de OC con factura
         cursor.execute("""
             SELECT numero_oc, centro_costo, fecha_factura, numero_factura, 
-                   registro_compra, monto_factura
+                   registro_compra, monto_factura, monto_oc
             FROM registroOC
             ORDER BY fecha_registro DESC
         """)
         adquisiciones_guardadas = cursor.fetchall()
 
-        # Datos tabla standbyOC
+        # OC en espera de factura
         cursor.execute("""
-            SELECT numero_oc, centro_costo, fecha_registro
+            SELECT numero_oc, centro_costo, fecha_registro, monto_oc
             FROM standbyOC
             ORDER BY fecha_registro DESC
         """)
         adquisiciones_en_espera = cursor.fetchall()
 
-        # Centros de costo
+        # Centros de Costo
         cursor.execute("""
             SELECT id_proyecto, nombre_proyecto
             FROM centros_costo
@@ -768,9 +781,9 @@ def adquisiciones():
         centros_costo = cursor.fetchall()
 
     return render_template('adquisiciones.html',
-                       historial_adquisiciones=adquisiciones_guardadas,
-                       oc_espera_factura=adquisiciones_en_espera,
-                       centros_costo=centros_costo)
+                           historial_adquisiciones=adquisiciones_guardadas,
+                           oc_espera_factura=adquisiciones_en_espera,
+                           centros_costo=centros_costo)
 
 
 ########################################################################################################

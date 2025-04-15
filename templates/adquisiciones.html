@@ -20,6 +20,9 @@
                 <option value="{{ item.id_proyecto }}">{{ item.id_proyecto }} - {{ item.nombre_proyecto }}</option>
                 {% endfor %}
             </select>
+            <label>💲 Monto OC:</label>
+            <input type="number" name="monto_oc" min="0">
+
 
             <!-- Sección Factura -->
             <div style="border-top: 1px solid #ccc; margin-top: 20px; padding-top: 10px;">
@@ -65,6 +68,7 @@
                         <tr>
                             <th>N° OC</th>
                             <th>Centro Costo</th>
+                            <th>Monto OC</th>
                             <th>Fecha Factura</th>
                             <th>N° Factura</th>
                             <th>Registro Compra</th>
@@ -76,6 +80,7 @@
                         <tr>
                             <td>{{ item.numero_oc }}</td>
                             <td>{{ item.centro_costo }}</td>
+                            <td>${{ item.monto_oc or '-' }}</td>
                             <td>{{ item.fecha_factura or '-' }}</td>
                             <td>{{ item.numero_factura or '-' }}</td>
                             <td>{{ item.registro_compra or '-' }}</td>
@@ -101,6 +106,7 @@
                             <th>N° OC</th>
                             <th>Centro Costo</th>
                             <th>Fecha Registro</th>
+                            <th>Monto OC</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -109,6 +115,7 @@
                             <td>{{ item.numero_oc }}</td>
                             <td>{{ item.centro_costo }}</td>
                             <td>{{ item.fecha_registro }}</td>
+                            <td>${{ item.monto_oc or '-' }}</td>
                         </tr>
                         {% else %}
                         <tr>
