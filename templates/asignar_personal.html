@@ -1,0 +1,234 @@
+{% extends 'base.html' %}
+
+{% block title %}Asignar Personal a Centro de Costo{% endblock %}
+
+{% block content %}
+<!-- Botón Exportar Excel -->
+<!-- Botón Exportar Personal -->
+<div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
+    <form method="GET" action="{{ url_for('descargar_excel', tabla='asignacion_personal') }}" style="display: flex; gap: 10px; align-items: center;">
+        <label for="centro_costo_export" style="margin-bottom: 0;">Exportar Personal:</label>
+        <select name="centro_costo" id="centro_costo_export" class="form-select form-select-sm" style="width: 200px;">
+            <option value="">Todos los centros de costo</option>
+            {% for centro in centros_costo %}
+                <option value="{{ centro.id_proyecto }} - {{ centro.nombre_proyecto }}">{{ centro.id_proyecto }} - {{ centro.nombre_proyecto }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-success btn-sm">⬇️ Exportar Excel</button>
+    </form>
+</div>
+
+
+
+
+
+<div style="display: flex; gap: 30px; align-items: flex-start; flex-wrap: wrap;">
+    <!-- Cuadrante 1: Agregar nuevo personal -->
+    <div class="formulario" style="flex: 1 1 45%; padding: 15px;">
+        <h2>➕ Agregar Nuevo Personal</h2>
+        <form method="POST">
+            <input type="text" name="nuevo_nombre" placeholder="Nombre" required><br>
+            <input type="text" name="nuevo_apellido" placeholder="Apellido" required><br>
+            <label for="nuevo_rut">🆔 RUT (sin puntos, con guión):</label>
+            <input type="text" id="nuevo_rut" name="nuevo_rut"
+                    pattern="^\d{7,8}-[\dkK]$"
+                    placeholder="Ej: 12345678-9"
+                    required
+                    class="form-control form-control-sm"
+                    oninvalid="this.setCustomValidity('Formato inválido. Usa 7 u 8 dígitos, guion y dígito verificador (Ej: 12345678-9)')"
+                    oninput="this.setCustomValidity('')"><br>
+
+            <input type="text" name="nuevo_rol" placeholder="Rol" required><br>
+
+            <select name="nuevo_genero" required style="margin-top: 8px;">
+                <option value="">Selecciona género</option>
+                <option value="Femenino">Femenino</option>
+                <option value="Masculino">Masculino</option>
+            </select><br>
+
+            <input type="number" name="pago_haberes" id="pago_haberes" placeholder="💰 Pago HABERES mensual" required><br>
+
+            <label style="margin-top: 8px;">💸 Pago por hora (estimado):</label>
+            <input type="text" id="pago_hora_resultado" readonly style="background: #f2f2f2; border: 1px solid #ccc; padding: 5px;">
+
+            <button type="submit" name="agregar_personal" style="margin-top: 10px;">✅ Agregar</button>
+        </form>
+    </div>
+
+    <!-- Cuadrante 2: Asignar personal -->
+    <div class="formulario" style="flex: 1 1 45%; padding: 15px;">
+        <h2>👥 Lista de Personal</h2>
+        <input type="text" id="buscador" placeholder="Buscar por nombre, apellido o RUT" oninput="filtrarPersonal()">
+
+        <form method="POST">
+            <div class="tabla-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Seleccionar</th>
+                            <th>Nombre</th>
+                            <th>Apellido</th>
+                            <th>RUT</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-personal">
+                        {% for persona in lista_personal %}
+                        <tr>
+                            <td><input type="checkbox" name="seleccionados" value="{{ persona.rut }}|{{ persona.nombre }}|{{ persona.apellido }}|{{ persona.rol }}"></td>
+                            <td>{{ persona.nombre }}</td>
+                            <td>{{ persona.apellido }}</td>
+                            <td>{{ persona.rut }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <label style="margin-top: 15px;">🏢 Selecciona Centro de Costo:</label>
+            <select name="centro_costo" required>
+                <option value="">-- Selecciona --</option>
+                {% for centro in centros_costo %}
+                <option value="{{ centro.id_proyecto }} - {{ centro.nombre_proyecto }}">
+                    {{ centro.id_proyecto }} - {{ centro.nombre_proyecto }}
+                </option>
+                {% endfor %}
+            </select>
+
+            <button type="submit" name="confirmar_asignacion" style="margin-top: 15px;">💾 Guardar Cambios</button>
+        </form>
+    </div>
+
+    <!-- Cuadrante 3: Datos del proyecto -->
+    <div class="formulario" style="flex: 1 1 45%; padding: 15px;">
+        <h2>📈 Datos del Proyecto</h2>
+        <form method="POST">
+            <label>🏢 Centro de Costo:</label>
+            <select name="centro_costo_ingreso" required>
+                <option value="">-- Selecciona --</option>
+                {% for centro in centros_costo %}
+                <option value="{{ centro.id_proyecto }} - {{ centro.nombre_proyecto }}">
+                    {{ centro.id_proyecto }} - {{ centro.nombre_proyecto }}
+                </option>
+                {% endfor %}
+            </select>
+
+            <label>💰 Ingreso del Proyecto:</label>
+            <input type="number" name="ingreso" placeholder="Ingreso del Proyecto" required>
+
+            <label>📅 Fecha de Inicio:</label>
+            <input type="date" name="fecha_inicio" required>
+
+            <label>📅 Fecha de Término:</label>
+            <input type="date" name="fecha_termino" required>
+
+            <label>📊 Margen Esperado (%):</label>
+            <input type="number" step="any" name="margen" placeholder="Margen Esperado">
+
+            <button type="submit" name="guardar_ingreso_proyecto" style="margin-top: 10px;">💾 Guardar Proyecto</button>
+        </form>
+    </div>
+
+    <!-- Cuadrante 4: Resumen de asignación -->
+    <div class="formulario" style="flex: 1 1 45%; padding: 15px; max-height: 400px; overflow-y: auto;">
+        <h3>📋 Resumen de Personal Asignado por Centro de Costo</h3>
+        {% for item in resumen_asignacion %}
+        <details style="margin-bottom: 15px;">
+            <summary><strong>{{ item.centro_costo }}</strong> – {{ item.cantidad }} persona(s)</summary>
+            <ul style="margin-top: 10px;">
+                {% for persona in detalle_asignacion[item.centro_costo] %}
+                <li>
+                    {{ persona.nombre }} {{ persona.apellido }} – {{ persona.rut }}
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="rut" value="{{ persona.rut }}">
+                        <input type="hidden" name="centro_costo_eliminar" value="{{ item.centro_costo }}">
+                        <button type="submit" name="eliminar_asignacion" class="btn-simple">Eliminar</button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+        </details>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Flash de mensajes -->
+<div class="mensajes">
+    {% with messages = get_flashed_messages() %}
+    {% for message in messages %}
+    <div class="alerta">{{ message }}</div>
+    {% endfor %}
+    {% endwith %}
+</div>
+
+<style>
+.formulario {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+.tabla-scroll {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-top: 10px;
+    border: 1px solid #ccc;
+}
+.tabla-scroll table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.tabla-scroll th, .tabla-scroll td {
+    padding: 8px;
+    border: 1px solid #ddd;
+    font-size: 14px;
+}
+.alerta {
+    background: #d1e7dd;
+    border-left: 5px solid #0f5132;
+    padding: 10px;
+    margin-top: 10px;
+    border-radius: 5px;
+}
+.btn-simple {
+    background: none;
+    border: none;
+    color: crimson;
+    cursor: pointer;
+    font-size: 0.9em;
+    margin-left: 8px;
+    text-decoration: underline;
+}
+.btn-simple:hover {
+    color: darkred;
+}
+</style>
+
+<script>
+function filtrarPersonal() {
+    const input = document.getElementById('buscador').value.toLowerCase();
+    const filas = document.querySelectorAll('#tabla-personal tr');
+    filas.forEach(fila => {
+        const texto = fila.textContent.toLowerCase();
+        fila.style.display = texto.includes(input) ? '' : 'none';
+    });
+}
+
+// Calcular pago por hora automáticamente
+document.addEventListener('DOMContentLoaded', function () {
+    const haberesInput = document.getElementById('pago_haberes');
+    const resultado = document.getElementById('pago_hora_resultado');
+
+    if (haberesInput) {
+        haberesInput.addEventListener('input', function () {
+            const haberes = parseFloat(haberesInput.value);
+            if (!isNaN(haberes)) {
+                const pagoHora = (haberes / 176).toFixed(2);
+                resultado.value = `$${pagoHora} por hora`;
+            } else {
+                resultado.value = '';
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -3,212 +3,106 @@
 {% block title %}Adquisiciones{% endblock %}
 
 {% block content %}
+<h2>📦 Registro de Facturas</h2>
 
 <div class="contenedor-flex">
+    <!-- Formulario para agregar factura -->
     <div class="formulario">
-        <h2>🛒 Registrar Adquisición</h2>
-
+        <h4>➕ Ingresar Nueva Factura</h4>
         <form method="POST">
-            <!-- Sección Datos OC -->
-            <label>📦 N° Orden de Compra:</label>
-            <input type="text" name="numero_oc" required>
-
-            <label>🏢 Centro de Costo:</label>
-            <select name="centro_costo" required>
-                <option value="">Selecciona un centro de costo</option>
-                {% for item in centros_costo %}
-                <option value="{{ item.id_proyecto }}">{{ item.id_proyecto }} - {{ item.nombre_proyecto }}</option>
-                {% endfor %}
-            </select>
-            <label>💲 Monto OC:</label>
-            <input type="number" name="monto_oc" min="0">
-
-
-            <!-- Sección Factura -->
-            <div style="border-top: 1px solid #ccc; margin-top: 20px; padding-top: 10px;">
-                <h3 style="color: #444;">📄 Agregar Factura (opcional)</h3>
-
-                <label>🗓️ Fecha Factura:</label>
-                <input type="date" name="fecha_factura">
-
-                <label>🧾 N° Factura:</label>
-                <input type="text" name="numero_factura">
-
-                <label>📌 RUT Proveedor:</label>
-                <input type="text" name="rut_proveedor">
-
-                <label>👤 Nombre Proveedor:</label>
-                <input type="text" name="nombre_proveedor">
-
-                <label>📘 Registro Compra:</label>
-                <input type="text" name="registro_compra">
-
-                <label>💰 Monto Factura:</label>
-                <input type="number" name="monto_factura" min="0">
-            </div>
-
-            <button type="submit" name="confirmar_adquisiciones">✅ Registrar</button>
+            <input type="text" name="numero_factura" placeholder="Número de Factura" required><br>
+            <input type="date" name="fecha_factura" placeholder="Fecha de Factura" required><br>
+            <input type="text" name="rut_proveedor" placeholder="RUT del Proveedor" required><br>
+            <input type="text" name="nombre_proveedor" placeholder="Nombre del Proveedor" required><br>
+            <input type="number" name="orden_compra" placeholder="Orden de Compra (opcional)"><br>
+            <input type="number" name="monto_factura" placeholder="Monto de la Factura" step="0.01" required><br>
+            <button type="submit" name="registrar_factura" class="btn btn-primary mt-2">💾 Registrar Factura</button>
         </form>
     </div>
 
-    <div class="lista-solicitudes">
-
-        <!-- Buscadores -->
-        <div style="margin-top: 10px; margin-bottom: 10px;">
-            <input type="text" id="buscadorOC" placeholder="🔎 Buscar por N° OC" oninput="filtrarTablaAdquisiciones()" style="margin-right: 10px; padding: 5px;">
-            <input type="text" id="buscadorCentroCosto" placeholder="🔎 Buscar por Centro de Costo" oninput="filtrarTablaAdquisiciones()" style="padding: 5px;">
+    <!-- Tabla lateral para facturas sin OC -->
+    <div class="formulario">
+        <h4>📋 Facturas Pendientes de OC</h4>
+        {% if facturas_sin_oc %}
+        <div class="tabla-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>N° Factura</th>
+                        <th>Fecha</th>
+                        <th>Proveedor</th>
+                        <th>Asignar OC</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for factura in facturas_sin_oc %}
+                    <tr>
+                        <td>{{ factura.numero_factura }}</td>
+                        <td>{{ factura.fecha_factura }}</td>
+                        <td>{{ factura.nombre_proveedor }}</td>
+                        <td>
+                            <form method="POST" style="display: flex; gap: 5px;">
+                                <input type="hidden" name="factura_a_actualizar" value="{{ factura.numero_factura }}">
+                                <input type="number" name="nueva_oc" placeholder="OC" required style="width: 80px;">
+                                <button type="submit" name="asignar_oc" class="btn btn-sm btn-success">Asignar</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-
-        <!-- Mini Tabla Historial de Adquisiciones -->
-        <h3>📜 Historial de Adquisiciones</h3>
-        <div class="mini-tabla-stock">
-            <div class="tabla-scroll">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>N° OC</th>
-                            <th>Centro Costo</th>
-                            <th>Monto OC</th>
-                            <th>Fecha Factura</th>
-                            <th>N° Factura</th>
-                            <th>Registro Compra</th>
-                            <th>Monto Factura</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in historial_adquisiciones %}
-                        <tr>
-                            <td>{{ item.numero_oc }}</td>
-                            <td>{{ item.centro_costo }}</td>
-                            <td>${{ item.monto_oc or '-' }}</td>
-                            <td>{{ item.fecha_factura or '-' }}</td>
-                            <td>{{ item.numero_factura or '-' }}</td>
-                            <td>{{ item.registro_compra or '-' }}</td>
-                            <td>${{ item.monto_factura or '-' }}</td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="6" style="text-align: center;">No hay adquisiciones registradas</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Mini Tabla OC en Espera de Factura -->
-        <h3>⏳ OC en Espera de Factura</h3>
-        <div class="mini-tabla-stock">
-            <div class="tabla-scroll">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>N° OC</th>
-                            <th>Centro Costo</th>
-                            <th>Fecha Registro</th>
-                            <th>Monto OC</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in oc_espera_factura %}
-                        <tr>
-                            <td>{{ item.numero_oc }}</td>
-                            <td>{{ item.centro_costo }}</td>
-                            <td>{{ item.fecha_registro }}</td>
-                            <td>${{ item.monto_oc or '-' }}</td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="3" style="text-align: center;">No hay OC en espera</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Mensajes Flash -->
-        <ul class="alertas">
-            {% with messages = get_flashed_messages() %}
-            {% for message in messages %}
-            <li class="alert">{{ message }}</li>
-            {% endfor %}
-            {% endwith %}
-        </ul>
-
+        {% else %}
+        <p class="text-muted">No hay facturas pendientes.</p>
+        {% endif %}
     </div>
+</div>
+
+<!-- Flash de mensajes -->
+<div class="mensajes mt-3">
+    {% with messages = get_flashed_messages() %}
+        {% for message in messages %}
+        <div class="alerta">{{ message }}</div>
+        {% endfor %}
+    {% endwith %}
 </div>
 
 <style>
 .contenedor-flex {
     display: flex;
-    gap: 20px;
+    flex-wrap: wrap;
+    gap: 30px;
 }
-
-.formulario, .lista-solicitudes {
-    width: 50%;
-    background-color: white;
+.formulario {
+    flex: 1 1 400px;
+    background: #fff;
     padding: 20px;
     border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 }
-
-.mini-tabla-stock {
-    margin-top: 20px;
+.formulario input {
+    margin-bottom: 10px;
+    width: 100%;
+    padding: 6px;
 }
-
 .tabla-scroll {
-    max-height: 200px;
+    max-height: 300px;
     overflow-y: auto;
-    border: 1px solid #ccc;
-    border-radius: 8px;
 }
-
 .tabla-scroll table {
     width: 100%;
     border-collapse: collapse;
+}
+.tabla-scroll th, .tabla-scroll td {
+    border: 1px solid #ccc;
+    padding: 8px;
     font-size: 14px;
 }
-
-.tabla-scroll th, .tabla-scroll td {
-    border: 1px solid #ddd;
-    padding: 8px;
-    text-align: left;
-}
-
-.tabla-scroll th {
-    background-color: #f2f2f2;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-}
-
-.alertas .alert {
-    background-color: #ffb5b5;
-    border: 1px solid #fd8f8f;
-    padding: 8px;
-    margin: 5px 0;
+.alerta {
+    background: #d1e7dd;
+    border-left: 5px solid #0f5132;
+    padding: 10px;
     border-radius: 5px;
 }
 </style>
-
-<script>
-function filtrarTablaAdquisiciones() {
-    const inputOC = document.getElementById('buscadorOC').value.toLowerCase();
-    const inputCentro = document.getElementById('buscadorCentroCosto').value.toLowerCase();
-    const filas = document.querySelectorAll('.tabla-scroll tbody tr');
-
-    filas.forEach(fila => {
-        const columnaOC = fila.children[0].textContent.toLowerCase();
-        const columnaCentro = fila.children[1].textContent.toLowerCase();
-
-        if (columnaOC.includes(inputOC) && columnaCentro.includes(inputCentro)) {
-            fila.style.display = '';
-        } else {
-            fila.style.display = 'none';
-        }
-    });
-}
-</script>
-
 {% endblock %}

@@ -1,0 +1,174 @@
+{% extends 'base.html' %}
+
+{% block title %}Control de Gastos{% endblock %}
+
+{% block content %}
+
+<div class="contenedor-flex">
+    <div class="formulario">
+        <h2>💰 Registrar Gasto</h2>
+
+        <form method="POST">
+            <!-- Centro de Costo -->
+            <label>🏢 Centro de Costo:</label>
+            <select name="centro_costo" required>
+                <option value="">Selecciona un centro de costo</option>
+                {% for item in centros_costo %}
+                <option value="{{ item.id_proyecto }} - {{ item.nombre_proyecto }}">{{ item.id_proyecto }} - {{ item.nombre_proyecto }}</option>
+                {% endfor %}
+            </select>
+
+            <!-- Categoría -->
+            <label>📂 Categoría:</label>
+            <select name="categoria" required>
+                <option value="">Selecciona una categoría</option>
+                {% for item in categorias %}
+                <option value="{{ item.categoria }}">{{ item.categoria }}</option>
+                {% endfor %}
+            </select>
+
+            <!-- Documento -->
+            <div style="border-top: 1px solid #ccc; margin-top: 20px; padding-top: 10px;">
+                <h3 style="color: #444;">📄 Agregar factura, boleta o código del registro</h3>
+
+                <label>🗓️ Fecha:</label>
+                <input type="date" name="fecha_factura">
+
+                <label>📑 Tipo de Documento:</label>
+                <select name="tipo_documento" required>
+                    <option value="">Selecciona tipo</option>
+                    <option value="Factura">Factura</option>
+                    <option value="Boleta">Boleta</option>
+                    <option value="Código">Código</option>
+                </select>
+
+                <label>🧾 N° Documento:</label>
+                <input type="text" name="numero_factura">
+
+                <label>📘 Descripción/Proveedor/Registro:</label>
+                <input type="text" name="registro_compra">
+
+                <label>💰 Monto NETO registro:</label>
+                <input type="number" name="monto_registro" min="0">
+            </div>
+
+            <button type="submit" name="confirmar_adquisiciones">✅ Registrar</button>
+        </form>
+    </div>
+
+    <div class="lista-solicitudes">
+
+        <!-- Buscador -->
+        <div style="margin-top: 10px; margin-bottom: 10px;">
+            <input type="text" id="buscadorCentroCosto" placeholder="🔎 Buscar por Centro de Costo" oninput="filtrarTablaAdquisiciones()" style="padding: 5px;">
+        </div>
+
+        <!-- Tabla Historial -->
+        <h3>📜 Historial de Gastos</h3>
+        <div class="mini-tabla-stock">
+            <div class="tabla-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Centro Costo</th>
+                            <th>Fecha</th>
+                            <th>N° Documento</th>
+                            <th>Monto</th>
+                            <th>Usuario</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in historial_adquisiciones %}
+                        <tr>
+                            <td>{{ item.centro_costo }}</td>
+                            <td>{{ item.fecha or '-' }}</td>
+                            <td>{{ item.numero_documento or '-' }}</td>
+                            <td>${{ item.monto_registro or '-' }}</td>
+                            <td>{{ item.usuario or '-' }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" style="text-align: center;">No hay gastos registrados</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Mensajes Flash -->
+        <ul class="alertas">
+            {% with messages = get_flashed_messages() %}
+            {% for message in messages %}
+            <li class="alert">{{ message }}</li>
+            {% endfor %}
+            {% endwith %}
+        </ul>
+
+    </div>
+</div>
+
+<style>
+.contenedor-flex {
+    display: flex;
+    gap: 20px;
+}
+.formulario, .lista-solicitudes {
+    width: 50%;
+    background-color: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+.mini-tabla-stock {
+    margin-top: 20px;
+}
+.tabla-scroll {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+}
+.tabla-scroll table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+.tabla-scroll th, .tabla-scroll td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+.tabla-scroll th {
+    background-color: #f2f2f2;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.alertas .alert {
+    background-color: #ffb5b5;
+    border: 1px solid #fd8f8f;
+    padding: 8px;
+    margin: 5px 0;
+    border-radius: 5px;
+}
+</style>
+
+<script>
+function filtrarTablaAdquisiciones() {
+    const inputCentro = document.getElementById('buscadorCentroCosto').value.toLowerCase();
+    const filas = document.querySelectorAll('.tabla-scroll tbody tr');
+
+    filas.forEach(fila => {
+        const columnaCentro = fila.children[0].textContent.toLowerCase();
+
+        if (columnaCentro.includes(inputCentro)) {
+            fila.style.display = '';
+        } else {
+            fila.style.display = 'none';
+        }
+    });
+}
+</script>
+
+{% endblock %}

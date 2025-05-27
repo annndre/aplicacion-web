@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+
+{% block title %}Registro de Horas{% endblock %}
+
+{% block content %}
+<h2>Registro de Horas</h2>
+
+<style>
+    tbody tr:nth-child(odd) {
+        background-color: #fff4e6;
+    }
+    tbody tr:nth-child(even) {
+        background-color: #f2f2f2;
+    }
+    tbody tr {
+        border-bottom: 2px solid #ccc;
+    }
+    tbody tr:last-child {
+        border-bottom: 3px solid #999;
+    }
+    tbody tr:hover {
+        background-color: #e0e0e0;
+    }
+</style>
+
+<!-- EXPORTACIÓN EXCEL -->
+<div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
+    <form method="GET" action="{{ url_for('descargar_excel', tabla='registro_horas') }}" style="display: flex; gap: 10px; align-items: center;">
+        <label for="centro_costo_export" style="margin-bottom: 0;">Exportar HH:</label>
+        <select name="centro_costo" id="centro_costo_export" class="form-select form-select-sm" style="width: 200px;">
+            <option value="">Todos los centros de costo</option>
+            {% for centro in centros_costo %}
+                <option value="{{ centro }}">{{ centro }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-success btn-sm">📅 Descargar Excel</button>
+    </form>
+</div>
+
+<!-- FORMULARIO DE SELECCIÓN -->
+<form method="POST" class="form-section">
+    <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
+        <div>
+            <label for="centro_costo">Centro de Costo:</label><br>
+            <select name="centro_costo" id="centro_costo" onchange="this.form.submit()" required style="width: 200px;">
+                <option value="">Selecciona uno</option>
+                {% for centro in centros_costo %}
+                    <option value="{{ centro }}" {% if centro == centro_costo %}selected{% endif %}>{{ centro }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label for="semana">Semana:</label><br>
+            <input type="week" id="semana" name="semana" value="{{ semana }}" onchange="this.form.submit()" required style="width: 200px;">
+        </div>
+    </div>
+</form>
+
+<!-- FORMULARIO DE REGISTRO DE HORAS -->
+{% if trabajadores %}
+<form method="POST">
+    <input type="hidden" name="centro_costo" value="{{ centro_costo }}">
+    <input type="hidden" name="semana" value="{{ semana }}">
+    <input type="hidden" name="guardar_semana" value="1">
+    <input type="hidden" name="dia_a_guardar" id="dia_a_guardar">
+
+    <div class="table-responsive mt-4">
+        <table class="table table-bordered">
+            <thead class="table-light">
+                <tr>
+                    <th>Nombre Trabajador</th>
+                    {% for dia_key, nombre in [('lun', 'Lunes'), ('mar', 'Martes'), ('mie', 'Miércoles'), ('jue', 'Jueves'), ('vie', 'Viernes')] %}
+                    <th>
+                        {{ nombre }}<br>
+                        <span class="text-muted small">{{ fechas_por_dia[dia_key]|default('') }}</span><br>
+                        {% if fechas_por_dia[dia_key]|default('') not in dias_bloqueados %}
+                        <input type="number" min="0" max="24" placeholder="Rellenar día" oninput="rellenarDia('{{ dia_key }}', this.value)" style="width: 100%;">
+                        {% endif %}
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for persona in trabajadores %}
+                <tr>
+                    <td>
+                        <strong>{{ loop.index }}. {{ persona[0] }} {{ persona[1] }}</strong><br>
+                        <span style="font-size: 0.8em; color: #666;">RUT: {{ persona[2] }}</span>
+                    </td>
+                    {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie'] %}
+                    <td>
+                        {% set fecha_dia = fechas_por_dia[dia_key]|default('') %}
+                        {% if fecha_dia in dias_bloqueados %}
+                            <span style="color: green; font-weight: bold;">✅ Día registrado</span>
+                        {% else %}
+                        <div style="display: flex; flex-direction: column;">
+                            <input type="text"
+                                name="hn_{{ persona[2] }}_{{ dia_key }}"
+                                pattern="^([0-9]{1,2}|[lLvVfFpP])?$"
+                                title="Horas (0–24) o L/V/F/P"
+                                placeholder="HN o L/V/F/P"
+                                class="form-control mb-1 hn_{{ dia_key }}">
+
+                            <input type="number"
+                                name="he_{{ persona[2] }}_{{ dia_key }}"
+                                min="0" max="24"
+                                placeholder="HE"
+                                class="form-control he_{{ dia_key }}">
+                        </div>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td></td>
+                    {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie'] %}
+                    <td>
+                        {% set fecha_dia = fechas_por_dia[dia_key]|default('') %}
+                        {% if fecha_dia not in dias_bloqueados %}
+                        <button type="submit" class="btn btn-primary btn-sm w-100 mt-2" onclick="return setDiaYEnviar('{{ dia_key }}')">
+                            Guardar {{ dia_key|capitalize }}
+                        </button>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</form>
+{% endif %}
+
+<!-- RESUMEN DE HORAS -->
+{% if centro_costo and resumen %}
+<div class="card mt-4 p-3 border-info" style="background-color: #f0f8ff;">
+    <h5>📊 Resumen del Centro de Costo: {{ centro_costo }}</h5>
+    {% if resumen.ultima_fecha %}
+        <p><strong>Última fecha con registro de horas:</strong> {{ resumen.ultima_fecha.strftime('%d-%m-%Y') }}</p>
+        <p><strong>Total acumulado (HN + HE):</strong> {{ resumen.total_horas }} horas</p>
+    {% else %}
+        <p>No hay registros aún para este centro de costo.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- SCRIPT FINAL -->
+<script>
+function rellenarDia(dia, valor) {
+    document.querySelectorAll('.hn_' + dia).forEach(input => {
+        if (!input.disabled) input.value = valor;
+    });
+}
+
+function setDiaYEnviar(dia) {
+    document.getElementById("dia_a_guardar").value = dia;
+    return true;
+}
+</script>
+{% endblock %}
