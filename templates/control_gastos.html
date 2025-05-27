@@ -62,7 +62,20 @@
         <div style="margin-top: 10px; margin-bottom: 10px;">
             <input type="text" id="buscadorCentroCosto" placeholder="🔎 Buscar por Centro de Costo" oninput="filtrarTablaAdquisiciones()" style="padding: 5px;">
         </div>
-
+        <!-- Descarga por centro de costo -->
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
+            <form method="GET" action="{{ url_descarga }}" style="display: flex; gap: 10px; align-items: center;">
+                <label for="centro_costo_export" style="margin-bottom: 0;">⬇️ Exportar Gastos:</label>
+                <select name="centro_costo" id="centro_costo_export" class="form-select form-select-sm" style="width: 200px;">
+                    <option value="">Todos los centros de costo</option>
+                    {% for item in centros_costo %}
+                        <option value="{{ item.id_proyecto }} - {{ item.nombre_proyecto }}">{{ item.id_proyecto }} - {{ item.nombre_proyecto }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-success btn-sm">📥 Descargar Excel</button>
+            </form>
+        </div>
+        
         <!-- Tabla Historial -->
         <h3>📜 Historial de Gastos</h3>
         <div class="mini-tabla-stock">

@@ -4,20 +4,21 @@
 
 {% block content %}
 <!-- Botón Exportar Excel -->
-<!-- Botón Exportar Personal -->
+<!-- 📥 Exportar Personal por Centro de Costo -->
 <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
     <form method="GET" action="{{ url_for('descargar_excel', tabla='asignacion_personal') }}" style="display: flex; gap: 10px; align-items: center;">
-        <label for="centro_costo_export" style="margin-bottom: 0;">Exportar Personal:</label>
-        <select name="centro_costo" id="centro_costo_export" class="form-select form-select-sm" style="width: 200px;">
+        <label for="centro_costo_export" style="margin-bottom: 0; font-weight: bold;">Exportar Personal:</label>
+        <select name="centro_costo" id="centro_costo_export" class="form-select form-select-sm" style="width: 220px;">
             <option value="">Todos los centros de costo</option>
             {% for centro in centros_costo %}
-                <option value="{{ centro.id_proyecto }} - {{ centro.nombre_proyecto }}">{{ centro.id_proyecto }} - {{ centro.nombre_proyecto }}</option>
+                <option value="{{ centro.id_proyecto }} - {{ centro.nombre_proyecto }}">
+                    {{ centro.id_proyecto }} - {{ centro.nombre_proyecto }}
+                </option>
             {% endfor %}
         </select>
-        <button type="submit" class="btn btn-success btn-sm">⬇️ Exportar Excel</button>
+        <button type="submit" class="btn btn-success btn-sm">📥 Descargar Excel</button>
     </form>
 </div>
-
 
 
 

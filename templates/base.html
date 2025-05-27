@@ -161,13 +161,14 @@
             {% endwith %}
         </div>
 
-        {% if mostrar_descarga %}
-            <div style="text-align: right; margin-bottom: 10px;">
-                <a href="{{ url_descarga }}" class="btn-descarga-excel">
-                    📥 Descargar Excel
-                </a>
-            </div>
-        {% endif %}
+            {% if mostrar_descarga and request.endpoint not in ['control_gastos', 'asignar_personal'] %}
+                <div style="text-align: right; margin-bottom: 10px;">
+                    <a href="{{ url_descarga }}" class="btn-descarga-excel">
+                        📥 Descargar Excel
+                    </a>
+                </div>
+            {% endif %}
+
 
         {% block content %}{% endblock %}
     </div>
