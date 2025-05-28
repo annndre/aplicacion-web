@@ -58,7 +58,7 @@
 
     <div class="lista-solicitudes">
 
-        <!-- Buscador -->
+        <!-- Buscador --
         <div style="margin-top: 10px; margin-bottom: 10px;">
             <input type="text" id="buscadorCentroCosto" placeholder="🔎 Buscar por Centro de Costo" oninput="filtrarTablaAdquisiciones()" style="padding: 5px;">
         </div>
@@ -68,7 +68,7 @@
             <form method="GET" action="{{ url_descarga }}" style="display: flex; gap: 10px; align-items: center;">
                 <label for="centro_costo_export" style="margin-bottom: 0;">⬇️ Exportar Gastos:</label>
                 <select name="centro_costo" id="centro_costo_export" class="form-select form-select-sm" style="width: 200px;">
-                    <option value="">Todos los centros de costo</option>
+                    <option value="" disabled selected>Selecciona un centro de costo</option>
                     {% for centro in centros_costo %}
                         <option value="{{ centro }}">{{ centro }}</option>
                     {% endfor %}
@@ -77,7 +77,7 @@
             </form>
         </div>
         
-        <!-- Tabla Historial -->
+        <!-- Tabla Historial --
         <h3>📜 Historial de Gastos</h3>
         <div class="mini-tabla-stock">
             <div class="tabla-scroll">

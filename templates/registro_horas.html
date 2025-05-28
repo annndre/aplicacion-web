@@ -27,8 +27,8 @@
 <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
     <form method="GET" action="{{ url_for('descargar_excel', tabla='registro_horas') }}" style="display: flex; gap: 10px; align-items: center;">
         <label for="centro_costo_export" style="margin-bottom: 0;">Exportar HH:</label>
-        <select name="centro_costo" id="centro_costo_export" class="form-select form-select-sm" style="width: 200px;">
-            <option value="">Todos los centros de costo</option>
+        <select name="centro_costo" id="centro_costo_export" class="form-select form-select-sm" required style="width: 200px;">
+            <option value="" disabled selected>Selecciona un centro de costo</option>
             {% for centro in centros_costo %}
                 <option value="{{ centro }}">{{ centro }}</option>
             {% endfor %}
@@ -36,6 +36,7 @@
         <button type="submit" class="btn btn-success btn-sm">📅 Descargar Excel</button>
     </form>
 </div>
+
 
 <!-- FORMULARIO DE SELECCIÓN -->
 <form method="POST" class="form-section">
