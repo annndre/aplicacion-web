@@ -4,7 +4,7 @@
 
 {% block content %}
 <!-- Botón Exportar Excel -->
-<!-- 📥 Exportar Personal por Centro de Costo -->
+<!-- 📅 Exportar Personal por Centro de Costo -->
 <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
     <form method="GET" action="{{ url_for('descargar_excel', tabla='asignacion_personal') }}" style="display: flex; gap: 10px; align-items: center;">
         <label for="centro_costo_export" style="margin-bottom: 0; font-weight: bold;">Exportar Personal:</label>
@@ -16,12 +16,9 @@
                 </option>
             {% endfor %}
         </select>
-        <button type="submit" class="btn btn-success btn-sm">📥 Descargar Excel</button>
+        <button type="submit" class="btn btn-success btn-sm">📅 Descargar Excel</button>
     </form>
 </div>
-
-
-
 
 <div style="display: flex; gap: 30px; align-items: flex-start; flex-wrap: wrap;">
     <!-- Cuadrante 1: Agregar nuevo personal -->
@@ -39,7 +36,12 @@
                     oninvalid="this.setCustomValidity('Formato inválido. Usa 7 u 8 dígitos, guion y dígito verificador (Ej: 12345678-9)')"
                     oninput="this.setCustomValidity('')"><br>
 
-            <input type="text" name="nuevo_rol" placeholder="Rol" required><br>
+            <label for="nuevo_rol">Rol:</label>
+            <select name="nuevo_rol" required style="margin-bottom: 8px;">
+                <option value="">Selecciona un rol</option>
+                <option value="trabajador">Trabajador</option>
+                <option value="terreno">Jefe de terreno</option>
+            </select><br>
 
             <select name="nuevo_genero" required style="margin-top: 8px;">
                 <option value="">Selecciona género</option>
@@ -56,36 +58,65 @@
         </form>
     </div>
 
-    <!-- Cuadrante 2: Asignar personal -->
+    <!-- Cuadrante 2: Asignar personal separado por rol -->
     <div class="formulario" style="flex: 1 1 45%; padding: 15px;">
         <h2>👥 Lista de Personal</h2>
         <input type="text" id="buscador" placeholder="Buscar por nombre, apellido o RUT" oninput="filtrarPersonal()">
 
         <form method="POST">
-            <div class="tabla-scroll">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Seleccionar</th>
-                            <th>Nombre</th>
-                            <th>Apellido</th>
-                            <th>RUT</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabla-personal">
-                        {% for persona in lista_personal %}
-                        <tr>
-                            <td><input type="checkbox" name="seleccionados" value="{{ persona.rut }}|{{ persona.nombre }}|{{ persona.apellido }}|{{ persona.rol }}"></td>
-                            <td>{{ persona.nombre }}</td>
-                            <td>{{ persona.apellido }}</td>
-                            <td>{{ persona.rut }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                <!-- Mini tabla trabajadores -->
+                <div class="tabla-scroll" style="flex: 1 1 48%;">
+                    <h5>👷 Trabajadores</h5>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Seleccionar</th>
+                                <th>Nombre</th>
+                                <th>Apellido</th>
+                                <th>RUT</th>
+                            </tr>
+                        </thead>
+                        <tbody class="tabla-personal">
+                            {% for persona in lista_personal if persona.rol == 'trabajador' %}
+                            <tr>
+                                <td><input type="checkbox" name="seleccionados" value="{{ persona.rut }}|{{ persona.nombre }}|{{ persona.apellido }}|{{ persona.rol }}"></td>
+                                <td>{{ persona.nombre }}</td>
+                                <td>{{ persona.apellido }}</td>
+                                <td>{{ persona.rut }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Mini tabla jefes de terreno -->
+                <div class="tabla-scroll" style="flex: 1 1 48%;">
+                    <h5>🧑‍💼 Jefes de Terreno</h5>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Seleccionar</th>
+                                <th>Nombre</th>
+                                <th>Apellido</th>
+                                <th>RUT</th>
+                            </tr>
+                        </thead>
+                        <tbody class="tabla-personal">
+                            {% for persona in lista_personal if persona.rol == 'terreno' %}
+                            <tr>
+                                <td><input type="checkbox" name="seleccionados" value="{{ persona.rut }}|{{ persona.nombre }}|{{ persona.apellido }}|{{ persona.rol }}"></td>
+                                <td>{{ persona.nombre }}</td>
+                                <td>{{ persona.apellido }}</td>
+                                <td>{{ persona.rut }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
-            <label style="margin-top: 15px;">🏢 Selecciona Centro de Costo:</label>
+            <label style="margin-top: 15px; display: block;">🏢 Selecciona Centro de Costo:</label>
             <select name="centro_costo" required>
                 <option value="">-- Selecciona --</option>
                 {% for centro in centros_costo %}
@@ -95,9 +126,10 @@
                 {% endfor %}
             </select>
 
-            <button type="submit" name="confirmar_asignacion" style="margin-top: 15px;">💾 Guardar Cambios</button>
+            <button type="submit" name="confirmar_asignacion" style="margin-top: 15px;">📂 Guardar Cambios</button>
         </form>
     </div>
+
 
     <!-- Cuadrante 3: Datos del proyecto -->
     <div class="formulario" style="flex: 1 1 45%; padding: 15px;">
@@ -125,7 +157,7 @@
             <label>📊 Margen Esperado (%):</label>
             <input type="number" step="any" name="margen" placeholder="Margen Esperado">
 
-            <button type="submit" name="guardar_ingreso_proyecto" style="margin-top: 10px;">💾 Guardar Proyecto</button>
+            <button type="submit" name="guardar_ingreso_proyecto" style="margin-top: 10px;">📂 Guardar Proyecto</button>
         </form>
     </div>
 
