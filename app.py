@@ -988,7 +988,11 @@ def registro_horas():
                         if cursor.fetchone():
                             continue
 
-                        dias_trabajados = round(horas_normales / 9, 1) if horas_normales else 0
+                        # Lógica modificada para contar 'V' como un día trabajado
+                        if observacion == 'V':
+                            dias_trabajados = 1
+                        else:
+                            dias_trabajados = round(horas_normales / 9, 1) if horas_normales else 0
 
                         cursor.execute("""
                             INSERT INTO registro_horas (
@@ -1044,7 +1048,6 @@ def registro_horas():
                 except Exception as e:
                     flash(f"⚠️ Error al procesar la semana: {e}", "danger")
 
-    # (Opcional) Autoselección de primer centro si no se ha definido y hay disponibles
     if not centro_costo_actual and centros_costo:
         centro_costo_actual = centros_costo[0]
 
@@ -1071,7 +1074,6 @@ def registro_horas():
                            fechas_por_dia=fechas_por_dia,
                            dias_bloqueados=dias_bloqueados,
                            resumen=resumen)
-
 ########################################################################################################
 @app.route('/adquisiciones', methods=['GET', 'POST'])
 def adquisiciones():
