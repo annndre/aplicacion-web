@@ -40,6 +40,7 @@
                     <option value="Factura">Factura</option>
                     <option value="Boleta">Boleta</option>
                     <option value="Código">Código</option>
+                    <option value="Orden de compra">Orden de compra</option>
                 </select>
 
                 <label>🧾 N° Documento:</label>
@@ -50,6 +51,9 @@
 
                 <label>💰 Monto NETO registro:</label>
                 <input type="number" name="monto_registro" min="0">
+
+                <label>💳 Tipo de Pago:</label>
+                <input type="text" name="tipo_pago" placeholder="Ej: Contado, Credito a 30 dias, Cheque, Transferencia">
             </div>
 
             <button type="submit" name="confirmar_adquisiciones">✅ Registrar</button>
@@ -57,11 +61,6 @@
     </div>
 
     <div class="lista-solicitudes">
-
-        <!-- Buscador --
-        <div style="margin-top: 10px; margin-bottom: 10px;">
-            <input type="text" id="buscadorCentroCosto" placeholder="🔎 Buscar por Centro de Costo" oninput="filtrarTablaAdquisiciones()" style="padding: 5px;">
-        </div>
 
         <!-- Descarga por centro de costo -->
         <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
@@ -77,39 +76,7 @@
             </form>
         </div>
         
-        <!-- Tabla Historial --
-        <h3>📜 Historial de Gastos</h3>
-        <div class="mini-tabla-stock">
-            <div class="tabla-scroll">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Centro Costo</th>
-                            <th>Fecha</th>
-                            <th>N° Documento</th>
-                            <th>Monto</th>
-                            <th>Usuario</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in historial_adquisiciones %}
-                        <tr>
-                            <td>{{ item.centro_costo }}</td>
-                            <td>{{ item.fecha or '-' }}</td>
-                            <td>{{ item.numero_documento or '-' }}</td>
-                            <td>${{ item.monto_registro or '-' }}</td>
-                            <td>{{ item.usuario or '-' }}</td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="5" style="text-align: center;">No hay gastos registrados</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
+        
         <!-- Mensajes Flash -->
         <ul class="alertas">
             {% with messages = get_flashed_messages() %}
@@ -167,22 +134,5 @@
     border-radius: 5px;
 }
 </style>
-
-<script>
-function filtrarTablaAdquisiciones() {
-    const inputCentro = document.getElementById('buscadorCentroCosto').value.toLowerCase();
-    const filas = document.querySelectorAll('.tabla-scroll tbody tr');
-
-    filas.forEach(fila => {
-        const columnaCentro = fila.children[0].textContent.toLowerCase();
-
-        if (columnaCentro.includes(inputCentro)) {
-            fila.style.display = '';
-        } else {
-            fila.style.display = 'none';
-        }
-    });
-}
-</script>
 
 {% endblock %}

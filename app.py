@@ -39,15 +39,16 @@ usuarios = {
     "Gonzalo": {"password": "ADMINJCM", "rol": "admin"},
     "Javier": {"password": "ADMINJCM", "rol": "admin"},
     "andrea": {"password": "ADMINJCM", "rol": "admin"},
-    "Mauricio": {"password": "MAURICIOJCM", "rol": "bodega"},
+    "Mauricio": {"password": "MAURICIOJCM", "rol": "jefeB"},
     "Mariela": {"password": "MARIELAJCM", "rol": "bodega"},
     "bodega": {"password": "bodega", "rol": "bodega"},
     "admin": {"password": "1234", "rol": "admin"},
     "Nicolas": {"password": "NICOLASJCM", "rol": "bodega"},
-    "J.FUENTES": {"password": "J.FUENTESJCM", "rol": "terreno"},
-    "J.HENRIQUEZ": {"password": "J.HENRIQUEZJCM", "rol": "terreno"},
-    "O.DIAZ": {"password": "O.DIAZJCM", "rol": "terreno"},
-    "S.VILLAR": {"password": "S.VILLARJCM", "rol": "terreno"}
+    "J.FUENTES": {"password": "J.FUENTESJCM", "rol": "jefeT"},
+    "J.HENRIQUEZ": {"password": "J.HENRIQUEZJCM", "rol": "jefeT"},
+    "O.DIAZ": {"password": "O.DIAZJCM", "rol": "jefeT"},
+    "S.VILLAR": {"password": "S.VILLARJCM", "rol": "jefeT"},
+    "jefe terreno": {"password": "JEFETERRENOJCM", "rol": "jefeT"}
 
 }
 
@@ -56,6 +57,9 @@ def login():
     if request.method == 'POST':
         user = request.form['usuario']
         password = request.form['password']
+        print("🔍 Usuario ingresado:", user)
+        print("🔍 Contraseña ingresada:", password)
+
 
         conexion = obtener_conexion()
 
@@ -70,6 +74,7 @@ def login():
                 WHERE usuario = %s AND contraseña = %s
             """, (user, password))
             resultado = cursor.fetchone()
+            print("📦 Resultado SQL:", resultado)
 
             if resultado:
                 session['usuario'] = resultado['usuario']
@@ -78,10 +83,12 @@ def login():
 
                 if session['rol'] == 'admin':
                     return redirect(url_for('asignar_personal'))
-                elif session['rol'] == 'terreno':
+                elif session['rol'] == 'jefeT':
                     return redirect(url_for('control_gastos'))
                 elif session['rol'] == 'bodega':
                     return redirect(url_for('solicitudes'))
+                elif session['rol'] == 'jefeB':
+                    return redirect(url_for('solicitudes'))                
 
         flash('Credenciales incorrectas', 'danger')
         return redirect(url_for('login'))
@@ -92,7 +99,7 @@ def login():
 
 @app.route('/solicitudes', methods=['GET', 'POST'])
 def solicitudes():
-    if 'usuario' not in session or session.get('rol') not in ['admin', 'bodega']:
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'bodega','jefeB']:
         flash("No tienes acceso a esta página", "danger")
         return redirect(url_for('login'))
 
@@ -307,7 +314,7 @@ def confirmar_solicitud():
 ####################################################################################################################
 @app.route('/devoluciones', methods=['GET', 'POST'])
 def devoluciones():
-    if 'usuario' not in session or session.get('rol') not in ['admin', 'bodega']:
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'bodega','jefeB']:
         flash("No tienes acceso a esta página", "danger")
         return redirect(url_for('login'))
 
@@ -340,7 +347,6 @@ def devoluciones():
         url_descarga="/descargar_excel/devoluciones"
     )
 
-    return render_template('devoluciones.html', devoluciones=[], nombre='', rut='')
 
 @app.route('/confirmar_devolucion', methods=['POST'])
 def confirmar_devolucion():
@@ -352,6 +358,7 @@ def confirmar_devolucion():
     if not ids:
         flash("⚠️ Debes seleccionar al menos un producto para devolver.", "warning")
         return redirect(url_for('devoluciones'))
+
     usuario_actual = session.get('usuario')
 
     conexion = obtener_conexion()
@@ -360,12 +367,13 @@ def confirmar_devolucion():
             # Obtener los datos antes de eliminar
             cursor.execute("SELECT * FROM devoluciones_pendientes WHERE id = %s", (id_,))
             devolucion = cursor.fetchone()
+
             if devolucion:
-                # Insertar en historial_devoluciones
+                # Insertar en historial_devoluciones con centro_costo
                 cursor.execute("""
                     INSERT INTO historial_devoluciones 
-                    (nombre_devolutor, rut_devolutor, producto_id, producto_nombre, cantidad, fecha_devolucion, usuario)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    (nombre_devolutor, rut_devolutor, producto_id, producto_nombre, cantidad, fecha_devolucion, usuario, centro_costo)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     devolucion['nombre_solicitante'],
                     devolucion['rut_solicitante'],
@@ -373,9 +381,11 @@ def confirmar_devolucion():
                     devolucion['producto_nombre'],
                     devolucion['cantidad'],
                     devolucion['fecha'],
-                    usuario_actual
+                    usuario_actual,
+                    devolucion['centro_costo']
                 ))
-                # 2. Actualizar stock_disponible en la tabla productos
+
+                # Actualizar stock_disponible en productos
                 cursor.execute("""
                     UPDATE productos
                     SET stock_disponible = stock_disponible + %s
@@ -385,17 +395,19 @@ def confirmar_devolucion():
                     devolucion['producto_id']
                 ))
 
+                # Eliminar de devoluciones_pendientes
+                cursor.execute("DELETE FROM devoluciones_pendientes WHERE id = %s", (id_,))
 
-            cursor.execute("DELETE FROM devoluciones_pendientes WHERE id = %s", (id_,))
     conexion.commit()
 
     flash("✅ Devoluciones confirmadas y eliminadas de la base.")
     return redirect(url_for('devoluciones'))
 
+
 ####################################################################################################################
 @app.route('/entradas', methods=['GET', 'POST'])
 def entradas():
-    if 'usuario' not in session or session.get('rol') not in ['admin', 'bodega']:
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'bodega','jefeB']:
         flash("No tienes acceso a esta página", "danger")
         return redirect(url_for('login'))
 
@@ -540,29 +552,104 @@ def entradas():
     )
 
 ####################################################################################################################
-@app.route('/inventario')
+@app.route('/inventario', methods=['GET', 'POST'])
 def ver_inventario():
-    if 'usuario' not in session or session.get('rol') not in ['admin', 'terreno','bodega']:
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeT', 'bodega', 'jefeB']:
         flash("No tienes acceso a esta página", "danger")
         return redirect(url_for('login'))
-    
+
     conexion = obtener_conexion()
+    usuario = session.get('usuario')
+    rol_usuario = session.get('rol')
+    rut_usuario = session.get('rut')
+
+    centros_costo = []
+    centro_seleccionado = request.args.get('centro_costo')
+    inventario = []
+    inventario_centro = []
+    productos = []
+    categorias = []
+
     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
         cursor.execute("SELECT * FROM productos")
         inventario = cursor.fetchall()
+        productos = inventario
+
+        cursor.execute("SELECT DISTINCT categoria FROM productos ORDER BY categoria")
+        categorias = [row[0] for row in cursor.fetchall()]
+
+        if rol_usuario == 'jefeT':
+            cursor.execute("""
+                SELECT DISTINCT centro_costo
+                FROM asignacion_personal
+                WHERE rut = %s
+            """, (rut_usuario,))
+            centros_costo = [row[0] for row in cursor.fetchall()]
+        else:
+            cursor.execute("SELECT DISTINCT centro_costo FROM historial_solicitudes")
+            centros_costo = [row[0] for row in cursor.fetchall()]
+
+        if centro_seleccionado:
+            cursor.execute("""
+                SELECT hs.producto_nombre,
+                       COALESCE(SUM(hs.cantidad), 0) - COALESCE(SUM(hd.cantidad), 0) AS cantidad_actual,
+                       MAX(hs.fecha_solicitud) AS ultima_solicitud
+                FROM historial_solicitudes hs
+                LEFT JOIN historial_devoluciones hd 
+                    ON hs.producto_id = hd.producto_id AND hs.centro_costo = hd.centro_costo
+                WHERE hs.centro_costo = %s
+                GROUP BY hs.producto_nombre
+            """, (centro_seleccionado,))
+            inventario_centro = cursor.fetchall()
+
+    tab_activa = request.args.get('tab_activa', 'general')
 
     return render_template(
         'inventario.html',
         inventario=inventario,
+        centros_costo=centros_costo,
+        centro_seleccionado=centro_seleccionado,
+        inventario_centro=inventario_centro,
+        categorias=categorias,
         mostrar_descarga=True,
-        url_descarga="/descargar_excel/inventario"
+        url_descarga="/descargar_excel/inventario",
+        tab_activa='centros' if centro_seleccionado else 'general',
+        rol_usuario=rol_usuario
+
     )
+
+
+@app.route('/editar_estado_producto', methods=['POST'])
+def editar_estado_producto():
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeB', 'bodega']:
+        flash("No tienes permisos para editar el estado de productos.", "danger")
+        return redirect(url_for('ver_inventario'))
+
+    producto_id = request.form.get('producto_id')
+    nuevo_estado = request.form.get('nuevo_estado')
+
+    if not producto_id or not nuevo_estado:
+        flash("Faltan datos para actualizar el estado del producto.", "warning")
+        return redirect(url_for('ver_inventario'))
+
+    conexion = obtener_conexion()
+    with conexion.cursor() as cursor:
+        cursor.execute("""
+            UPDATE productos
+            SET estado = %s
+            WHERE id = %s
+        """, (nuevo_estado, producto_id))
+        conexion.commit()
+
+    flash("✅ Estado del producto actualizado correctamente.", "success")
+    return redirect(url_for('ver_inventario'))
+
 
 ########################################################################################################################
 
 @app.route('/admin/centros-costo', methods=['GET', 'POST'])
 def gestionar_centros_costo():
-    if 'usuario' not in session or session.get('rol') not in ['admin', 'bodega']:
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'bodega','jefeB']:
         flash("No tienes acceso a esta página", "danger")
         return redirect(url_for('login'))
 
@@ -592,7 +679,7 @@ def gestionar_centros_costo():
 # RUTA PARA CONTROL DE GASTOS
 @app.route('/control_gastos', methods=['GET', 'POST'])
 def control_gastos():
-    if 'usuario' not in session or session.get('rol') not in ['admin', 'terreno']:
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeT']:
         flash("No tienes acceso a esta página", "danger")
         return redirect(url_for('login'))
 
@@ -601,13 +688,13 @@ def control_gastos():
     centros_costo = []
 
     with conexion.cursor() as cursor:
-        if rol_usuario == 'terreno':
-            rut_usuario = session.get('rut')  # ✅ usamos directamente el RUT desde la sesión
+        if rol_usuario in ['jefeT', 'jefeB']:
+            rut_usuario = session.get('rut')
             cursor.execute("""
                 SELECT DISTINCT centro_costo
                 FROM asignacion_personal
-                WHERE rut = %s AND rol = 'terreno'
-            """, (rut_usuario,))
+                WHERE rut = %s AND rol = %s
+            """, (rut_usuario, rol_usuario))
             centros_costo = [row[0] for row in cursor.fetchall()]
         else:  # admin
             cursor.execute("""
@@ -624,6 +711,7 @@ def control_gastos():
         tipo_documento = request.form.get('tipo_documento', '').strip()
         numero_documento = request.form.get('numero_factura', '').strip() or None
         registro_compra = request.form.get('registro_compra', '').strip() or None
+        tipo_pago = request.form.get('tipo_pago', '').strip()
         usuario_actual = session.get('usuario')
 
         try:
@@ -650,17 +738,19 @@ def control_gastos():
                 return redirect(url_for('control_gastos'))
 
             try:
+                # Insertar en registro_costos
                 cursor.execute("""
                     INSERT INTO registro_costos (
                         centro_costo, categoria, fecha, tipo_documento,
-                        numero_documento, registro_compra, monto_registro, usuario
+                        numero_documento, registro_compra, monto_registro, usuario, tipo_pago
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     centro_costo, categoria, fecha, tipo_documento,
-                    numero_documento, registro_compra, monto_registro, usuario_actual
+                    numero_documento, registro_compra, monto_registro, usuario_actual, tipo_pago
                 ))
 
+                # Insertar en facturaOC si es factura
                 if tipo_documento.lower() == 'factura' and numero_documento:
                     cursor.execute("""
                         INSERT INTO facturaOC (
@@ -672,12 +762,25 @@ def control_gastos():
                         numero_documento, fecha, monto_registro, 'control_gastos'
                     ))
 
+                # Insertar en facturaOC si es orden de compra
+                elif tipo_documento.lower() == 'orden de compra' and numero_documento:
+                    cursor.execute("""
+                        INSERT INTO facturaOC (
+                            orden_compra, monto_factura, origen
+                        )
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (orden_compra) DO NOTHING
+                    """, (
+                        numero_documento, monto_registro, 'control_gastos'
+                    ))
+
                 conexion.commit()
                 flash("✅ Registro guardado correctamente.", "success")
 
-            except psycopg2.IntegrityError:
+            except psycopg2.IntegrityError as e:
                 conexion.rollback()
                 flash("⚠️ Error inesperado al guardar el registro.", "danger")
+                print("ERROR DETALLE:", e)
 
         return redirect(url_for('control_gastos'))
 
@@ -685,7 +788,7 @@ def control_gastos():
     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
         cursor.execute("""
             SELECT centro_costo, categoria, fecha, tipo_documento, numero_documento, 
-                   registro_compra, monto_registro, usuario
+                   registro_compra, monto_registro, usuario, tipo_pago
             FROM registro_costos
             ORDER BY fecha DESC
         """)
@@ -712,7 +815,7 @@ def control_gastos():
 # RUTA PARA ASIGNAR PERSONAL
 @app.route('/asignar_personal', methods=['GET', 'POST']) 
 def asignar_personal():
-    if 'usuario' not in session or session.get('rol') not in ['admin', 'terreno']:
+    if 'usuario' not in session or session.get('rol') not in ['admin']:
         flash("No tienes acceso a esta página", "danger")
         return redirect(url_for('login'))
 
@@ -726,6 +829,7 @@ def asignar_personal():
             nuevo_nombre = request.form.get('nuevo_nombre', '').strip()
             nuevo_apellido = request.form.get('nuevo_apellido', '').strip()
             nuevo_rut = request.form.get('nuevo_rut', '').strip()
+            nuevo_especialidad = request.form.get('nuevo_especialidad', '').strip()
             nuevo_rol = request.form.get('nuevo_rol', '').strip()
             nuevo_genero = request.form.get('nuevo_genero', '').strip()
             pago_haberes_raw = request.form.get('pago_haberes', '').strip()
@@ -750,9 +854,9 @@ def asignar_personal():
                         return redirect(url_for('asignar_personal'))
 
                     cursor.execute("""
-                        INSERT INTO personal (nombre, apellido, rut, rol, genero, pago_hora)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                    """, (nuevo_nombre, nuevo_apellido, nuevo_rut, nuevo_rol, nuevo_genero, pago_hora))
+                        INSERT INTO personal (nombre, apellido, rut, especialidad, rol, genero, pago_hora)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (nuevo_nombre, nuevo_apellido, nuevo_rut, nuevo_especialidad, nuevo_rol, nuevo_genero, pago_hora))
                     conexion.commit()
                     flash(f"✅ {nuevo_nombre} {nuevo_apellido} agregado a la base de datos con pago por hora ${pago_hora}.", "success")
             return redirect(url_for('asignar_personal'))
@@ -840,9 +944,24 @@ def asignar_personal():
         cursor.execute("SELECT nombre, apellido, rut, rol FROM personal ORDER BY nombre ASC")
         lista_personal = cursor.fetchall()
 
-        cursor.execute("SELECT id_proyecto, nombre_proyecto FROM centros_costo ORDER BY id_proyecto")
-        centros_costo = cursor.fetchall()
+        # ✅ Filtrar centros de costo según el rol
+        rol_usuario = session.get('rol')
+        rut_usuario = session.get('rut')
 
+        if rol_usuario in ['jefeT', 'jefeB']:
+            cursor.execute("""
+                SELECT DISTINCT id_proyecto, nombre_proyecto
+                FROM centros_costo
+                WHERE (id_proyecto || ' - ' || nombre_proyecto) IN (
+                    SELECT centro_costo
+                    FROM asignacion_personal
+                    WHERE rut = %s
+                )
+                ORDER BY id_proyecto
+            """, (rut_usuario,))
+        else:
+            cursor.execute("SELECT id_proyecto, nombre_proyecto FROM centros_costo ORDER BY id_proyecto")
+        centros_costo = cursor.fetchall()
         cursor.execute("""
             SELECT centro_costo, COUNT(*) as cantidad
             FROM asignacion_personal
@@ -869,11 +988,11 @@ def asignar_personal():
 
 
 ##################################################################################################################
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 
 @app.route('/registro_horas', methods=['GET', 'POST'])
 def registro_horas():
-    if 'usuario' not in session or session.get('rol') not in ['admin', 'terreno']:
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeT', 'jefeB']:
         flash("No tienes acceso a esta página", "danger")
         return redirect(url_for('login'))
 
@@ -893,12 +1012,12 @@ def registro_horas():
     centros_costo = []
 
     with conexion.cursor() as cursor:
-        if rol_usuario == 'terreno':
+        if rol_usuario in ['jefeT', 'jefeB']:
             rut_usuario = session.get('rut')
             cursor.execute("""
                 SELECT DISTINCT centro_costo
                 FROM asignacion_personal
-                WHERE rut = %s AND rol = 'terreno'
+                WHERE rut = %s
             """, (rut_usuario,))
             centros_costo = [row[0] for row in cursor.fetchall()]
         else:
@@ -965,11 +1084,20 @@ def registro_horas():
                     hn_val = request.form.get(hn_key, '').strip().upper()
                     he_val = request.form.get(he_key, '').strip()
                     observacion = None
+                    observacionP = None
 
                     try:
                         if hn_val in ['L', 'V', 'F', 'P']:
                             horas_normales = 0
                             observacion = hn_val
+
+                            if hn_val == 'P':
+                                tipo_permiso = request.form.get(f'tipo_permiso_{rut}_{dia_a_guardar}', '')
+                                razon_permiso = request.form.get(f'razon_permiso_{rut}_{dia_a_guardar}', '')
+                                if tipo_permiso and razon_permiso:
+                                    observacionP = f"{tipo_permiso} - {razon_permiso}"
+                                else:
+                                    observacionP = tipo_permiso or razon_permiso or None
                         elif hn_val == '':
                             horas_normales = 0
                         else:
@@ -988,7 +1116,6 @@ def registro_horas():
                         if cursor.fetchone():
                             continue
 
-                        # Lógica modificada para contar 'V' como un día trabajado
                         if observacion == 'V':
                             dias_trabajados = 1
                         else:
@@ -998,11 +1125,12 @@ def registro_horas():
                             INSERT INTO registro_horas (
                                 rut, nombre, apellido, centro_costo,
                                 horas_normales, horas_extras, horas_fecha,
-                                fecha_registro, usuario, observacion, dias_trabajados
+                                fecha_registro, usuario, observacion, dias_trabajados, observacionP
                             )
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, %s, %s, %s)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, %s, %s, %s, %s)
                         """, (rut, nombre, apellido, centro_costo,
-                              horas_normales, horas_extras, fecha_real, usuario, observacion, dias_trabajados))
+                              horas_normales, horas_extras, fecha_real,
+                              usuario, observacion, dias_trabajados, observacionP))
 
                     except ValueError:
                         flash(f"⚠️ Error en las horas para {rut}", "warning")
@@ -1074,60 +1202,27 @@ def registro_horas():
                            fechas_por_dia=fechas_por_dia,
                            dias_bloqueados=dias_bloqueados,
                            resumen=resumen)
+
 ########################################################################################################
 @app.route('/adquisiciones', methods=['GET', 'POST'])
 def adquisiciones():
-    if 'usuario' not in session or session.get('rol') not in ['admin', 'bodega']:
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'bodega', 'jefeB']:
         flash("⚠️ Acceso restringido", "danger")
         return redirect(url_for('login'))
 
     conexion = obtener_conexion()
     usuario = session.get('usuario')
 
-    # Registro de nueva factura
     if request.method == 'POST':
-        if 'registrar_factura' in request.form:
-            numero_factura = request.form.get('numero_factura', '').strip()
-            fecha_factura = request.form.get('fecha_factura', '').strip()
-            rut_proveedor = request.form.get('rut_proveedor', '').strip()
-            nombre_proveedor = request.form.get('nombre_proveedor', '').strip()
-            orden_compra = request.form.get('orden_compra', '').strip() or None
-            monto_factura = request.form.get('monto_factura', '').strip()
-
-            if not numero_factura or not fecha_factura or not rut_proveedor or not nombre_proveedor or not monto_factura:
-                flash("⚠️ Todos los campos obligatorios deben completarse", "warning")
-                return redirect(url_for('adquisiciones'))
-
-            try:
-                orden_compra = int(orden_compra) if orden_compra else None
-            except ValueError:
-                flash("⚠️ El número de orden de compra debe ser numérico", "warning")
-                return redirect(url_for('adquisiciones'))
-
-            try:
-                monto_factura = float(monto_factura)
-            except ValueError:
-                flash("⚠️ El monto de la factura debe ser un número válido", "warning")
-                return redirect(url_for('adquisiciones'))
-
-            with conexion.cursor() as cursor:
-                cursor.execute("""
-                    INSERT INTO facturaOC (
-                        numero_factura, fecha_factura, rut_proveedor, nombre_proveedor,
-                        usuario_registro, orden_compra, monto_factura
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (numero_factura, fecha_factura, rut_proveedor, nombre_proveedor, usuario, orden_compra, monto_factura))
-            conexion.commit()
-            flash("✅ Factura registrada correctamente", "success")
-            return redirect(url_for('adquisiciones'))
-
-        # Asignar orden de compra a una factura pendiente
-        elif 'asignar_oc' in request.form:
+        # ✅ Completar datos de factura pendiente (OC, RUT, proveedor)
+        if 'asignar_oc' in request.form:
             numero_factura = request.form.get('factura_a_actualizar', '').strip()
             nueva_oc = request.form.get('nueva_oc', '').strip()
+            rut_proveedor = request.form.get('rut_proveedor', '').strip()
+            nombre_proveedor = request.form.get('nombre_proveedor', '').strip()
 
-            if not numero_factura or not nueva_oc:
-                flash("⚠️ Debes completar el número de factura y la OC", "warning")
+            if not numero_factura or not nueva_oc or not rut_proveedor or not nombre_proveedor:
+                flash("⚠️ Todos los campos deben completarse", "warning")
                 return redirect(url_for('adquisiciones'))
 
             try:
@@ -1139,14 +1234,67 @@ def adquisiciones():
             with conexion.cursor() as cursor:
                 cursor.execute("""
                     UPDATE facturaOC
-                    SET orden_compra = %s
+                    SET orden_compra = %s,
+                        rut_proveedor = %s,
+                        nombre_proveedor = %s
                     WHERE numero_factura = %s
-                """, (nueva_oc, numero_factura))
+                """, (nueva_oc, rut_proveedor, nombre_proveedor, numero_factura))
+
             conexion.commit()
-            flash(f"✅ Orden de compra asignada a la factura {numero_factura}", "success")
+            flash(f"✅ Datos actualizados para la factura {numero_factura}", "success")
             return redirect(url_for('adquisiciones'))
 
-    # Cargar facturas pendientes (sin OC)
+        # ✅ Completar orden de compra que ya está registrada sin factura
+        elif 'registrar_factura' in request.form:
+            orden_compra = request.form.get('orden_compra', '').strip()
+            numero_factura = request.form.get('numero_factura', '').strip()
+            fecha_factura = request.form.get('fecha_factura', '').strip()
+            rut_proveedor = request.form.get('rut_proveedor', '').strip()
+            nombre_proveedor = request.form.get('nombre_proveedor', '').strip()
+            monto_factura = request.form.get('monto_factura', '').strip()
+
+            if not orden_compra or not numero_factura or not fecha_factura or not rut_proveedor or not nombre_proveedor or not monto_factura:
+                flash("⚠️ Todos los campos deben completarse", "warning")
+                return redirect(url_for('adquisiciones'))
+
+            try:
+                orden_compra = int(orden_compra)
+                monto_factura = float(monto_factura)
+            except ValueError:
+                flash("⚠️ OC debe ser numérica y el monto válido", "warning")
+                return redirect(url_for('adquisiciones'))
+
+            with conexion.cursor() as cursor:
+                # Verifica si ya existe la orden
+                cursor.execute("SELECT id FROM facturaOC WHERE orden_compra = %s", (orden_compra,))
+                existe_oc = cursor.fetchone()
+
+                if existe_oc:
+                    # Actualiza datos
+                    cursor.execute("""
+                        UPDATE facturaOC
+                        SET numero_factura = %s,
+                            fecha_factura = %s,
+                            rut_proveedor = %s,
+                            nombre_proveedor = %s,
+                            monto_factura = %s
+                        WHERE orden_compra = %s
+                    """, (numero_factura, fecha_factura, rut_proveedor, nombre_proveedor, monto_factura, orden_compra))
+                else:
+                    # Inserta si no existe (por seguridad)
+                    cursor.execute("""
+                        INSERT INTO facturaOC (
+                            orden_compra, numero_factura, fecha_factura,
+                            rut_proveedor, nombre_proveedor, monto_factura, usuario_registro
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (orden_compra, numero_factura, fecha_factura, rut_proveedor, nombre_proveedor, monto_factura, usuario))
+
+            conexion.commit()
+            flash("✅ Factura completada correctamente", "success")
+            return redirect(url_for('adquisiciones'))
+
+    # 🔽 Cargar facturas que no tienen OC asignada
     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
         cursor.execute("""
             SELECT numero_factura, fecha_factura, rut_proveedor, nombre_proveedor
@@ -1156,7 +1304,19 @@ def adquisiciones():
         """)
         facturas_sin_oc = cursor.fetchall()
 
-    return render_template("adquisiciones.html", facturas_sin_oc=facturas_sin_oc)
+    # 🔽 Cargar órdenes de compra sin factura asociada
+    with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+        cursor.execute("""
+            SELECT orden_compra, monto_factura
+            FROM facturaOC
+            WHERE numero_factura IS NULL AND orden_compra IS NOT NULL
+            ORDER BY orden_compra
+        """)
+        ordenes_sin_factura = cursor.fetchall()
+
+    return render_template("adquisiciones.html",
+                           facturas_sin_oc=facturas_sin_oc,
+                           ordenes_sin_factura=ordenes_sin_factura)
 
 ####################################################################################################################
 @app.route('/descargar_excel/<tabla>')
@@ -1172,7 +1332,8 @@ def descargar_excel(tabla):
         "entradas": "historial_entradas",
         "inventario": "productos",
         "registro_horas": "registro_horas",
-        "asignacion_personal": "asignacion_personal"
+        "asignacion_personal": "asignacion_personal",
+        "inventario_proyectos": None  # caso especial
     }
 
     if tabla not in tabla_map:
@@ -1180,8 +1341,37 @@ def descargar_excel(tabla):
 
     centro_costo = request.args.get("centro_costo")
     conexion = obtener_conexion()
-    base_query = f"SELECT * FROM {tabla_map[tabla]}"
 
+    # 🎯 CASO ESPECIAL INVENTARIO PROYECTOS
+    if tabla == "inventario_proyectos":
+        if not centro_costo or centro_costo.strip() == "":
+            return "Debes seleccionar un centro de costo antes de descargar.", 400
+
+        nombre_centro = centro_costo.split(" - ", 1)[1] if " - " in centro_costo else centro_costo
+
+        with conexion.cursor() as cursor:
+            cursor.execute("""
+                SELECT hs.producto_nombre,
+                       COALESCE(SUM(hs.cantidad), 0) - COALESCE(SUM(hd.cantidad), 0) AS cantidad_actual,
+                       MAX(hs.fecha_solicitud) AS ultima_solicitud
+                FROM historial_solicitudes hs
+                LEFT JOIN historial_devoluciones hd 
+                    ON hs.producto_id = hd.producto_id AND hs.centro_costo = hd.centro_costo
+                WHERE hs.centro_costo = %s
+                GROUP BY hs.producto_nombre
+            """, (nombre_centro,))
+            datos = cursor.fetchall()
+
+        conexion.close()
+
+        df = pd.DataFrame(datos, columns=["producto_nombre", "cantidad_actual", "ultima_solicitud"])
+        output = BytesIO()
+        df.to_excel(output, index=False)
+        output.seek(0)
+        return send_file(output, download_name=f"inventario_{nombre_centro}.xlsx", as_attachment=True)
+
+    # 📦 OTROS CASOS ESTÁNDAR
+    base_query = f"SELECT * FROM {tabla_map[tabla]}"
     if tabla_map[tabla] in ["registro_horas", "registro_costos", "historial_solicitudes", "asignacion_personal"]:
         if not centro_costo or centro_costo.strip() == "":
             return "Debes seleccionar un centro de costo antes de descargar.", 400
@@ -1197,7 +1387,6 @@ def descargar_excel(tabla):
     output = BytesIO()
     df.to_excel(output, index=False)
     output.seek(0)
-
     return send_file(output, download_name=nombre, as_attachment=True)
 
 #####################################################################################################################################

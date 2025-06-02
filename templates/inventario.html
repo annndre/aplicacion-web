@@ -3,91 +3,208 @@
 {% block title %}Inventario{% endblock %}
 
 {% block content %}
-<h2>📦 Inventario de Productos</h2>
+<h2>📋 Panel de Inventario</h2>
 
-<div style="margin-bottom: 15px;">
-    <label for="buscarProducto">🔎 Buscar Producto:</label>
-    <input type="text" id="buscarProducto" placeholder="Ingrese nombre del producto..." oninput="filtrarProductos()">
-
-    <label for="filtroEstado">📌 Filtrar por Estado:</label>
-    <select id="filtroEstado" onchange="filtrarProductos()">
-        <option value="">Todos</option>
-        <option value="OPERATIVO">OPERATIVO</option>
-        <option value="NO OPERATIVO">NO OPERATIVO</option>
-    </select>
-
-    <label for="stockDisponible">📊 Stock Disponible:</label>
-    <input type="text" id="stockDisponible" readonly>
+<!-- Pestañas -->
+<div class="tab-container">
+    <button class="tab-btn {% if tab_activa != 'centros' %}active{% endif %}" onclick="cambiarTab('general')">📦 Inventario General</button>
+    <button class="tab-btn {% if tab_activa == 'centros' %}active{% endif %}" onclick="cambiarTab('centros')">🏧 Por Centro de Costo</button>
 </div>
 
-<table border="1" width="100%">
-    <thead>
-        <tr>
-            <th>ID Producto</th>
-            <th>Descripción/Nombre</th>
-            <th>Stock Disponible</th>
-            <th>Stock Crítico</th>
-            <th>Categoría</th>  <!-- 🔹 Nueva columna -->
-            <th>Estado</th>  <!-- 🔹 Nueva columna -->
-            {% if inventario and inventario[0] is defined and 'solicitudes' in inventario[0] %}
-                <th>Cantidad Solicitudes</th>
-            {% endif %}
-        </tr>
-    </thead>
-    <tbody id="tablaInventario">
-        {% for producto in inventario %}
-        <tr>
-            <td>{{ producto.id }}</td>
-            <td>{{ producto.producto_nombre }}</td>
-            <td>{{ producto.stock_disponible }}</td>
-            <td>{{ producto.stock_critico }}</td>
-            <td>{{ producto.categoria }}</td>  <!-- 🔹 Nueva columna -->
-            <td class="estado {{ 'operativo' if producto.estado == 'OPERATIVO' else 'no-operativo' }}">{{ producto.estado }}</td>  <!-- 🔹 Nueva columna -->
-            {% if 'solicitudes' in producto %}
-                <td>{{ producto.solicitudes }}</td>
-            {% endif %}
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<!-- TAB 1: Inventario General -->
+<div id="tab-general" class="tab-content {% if tab_activa != 'centros' %}active{% endif %}">
+    <div style="margin-bottom: 15px; display: flex; gap: 20px; flex-wrap: wrap;">
+        <div>
+            <label for="buscarProducto">🔎 Buscar Producto:</label>
+            <input type="text" id="buscarProducto" placeholder="Nombre..." oninput="filtrarProductos()">
+        </div>
+        <div>
+            <label for="filtroEstado">📌 Estado:</label>
+            <select id="filtroEstado" onchange="filtrarProductos()">
+                <option value="">Todos</option>
+                <option value="OPERATIVO">OPERATIVO</option>
+                <option value="OPERATIVO CON DEFICIENCIA">OPERATIVO CON DEFICIENCIA</option>
+                <option value="NO OPERATIVO">NO OPERATIVO</option>
+            </select>
+        </div>
+        <div>
+            <label for="filtroCategoria">📂 Categoría:</label>
+            <select id="filtroCategoria" onchange="filtrarProductos()">
+                <option value="">Todas</option>
+                {% for cat in categorias %}
+                    <option value="{{ cat }}">{{ cat }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
 
+    <div style="max-height: 450px; overflow-y: auto;">
+        <table border="1" width="100%">
+        <thead>
+            <tr>
+                <th>ID Producto</th>
+                <th>Descripción/Nombre</th>
+                <th>Stock Disponible</th>
+                <th>Stock Crítico</th>
+                <th>Categoría</th>
+                <th>Estado</th>
+                {% if rol_usuario in ['admin', 'jefeB', 'bodega'] %}
+                    <th>Editar Estado</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody id="tablaInventario">
+            {% for producto in inventario %}
+            <tr>
+                <td>{{ producto.id }}</td>
+                <td>{{ producto.producto_nombre }}</td>
+                <td>{{ producto.stock_disponible }}</td>
+                <td>{{ producto.stock_critico }}</td>
+                <td>{{ producto.categoria }}</td>
+                <td class="estado {{ 'operativo' if producto.estado == 'OPERATIVO' else 'deficiencia' if producto.estado == 'OPERATIVO CON DEFICIENCIA' else 'no-operativo' }}">{{ producto.estado }}</td>
+                {% if rol_usuario in ['admin', 'jefeB', 'bodega'] %}
+                <td>
+                    <form method="POST" action="{{ url_for('editar_estado_producto') }}" style="display: flex; align-items: center; gap: 4px;">
+                        <input type="hidden" name="producto_id" value="{{ producto.id }}">
+                        <select name="nuevo_estado" style="font-size: 12px; padding: 2px;" required>
+                            <option value="OPERATIVO" {% if producto.estado == 'OPERATIVO' %}selected{% endif %}>🟢</option>
+                            <option value="OPERATIVO CON DEFICIENCIA" {% if producto.estado == 'OPERATIVO CON DEFICIENCIA' %}selected{% endif %}>🟡</option>
+                            <option value="NO OPERATIVO" {% if producto.estado == 'NO OPERATIVO' %}selected{% endif %}>🔴</option>
+                        </select>
+                    <button type="submit" style="font-size: 12px; padding: 1px 6px;">✔️</button>
+                    </form>
+                </td>
+
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- TAB 2: Por Centro de Costo -->
+<div id="tab-centros" class="tab-content {% if tab_activa == 'centros' %}active{% endif %}">
+    <h3>🏧 Inventario por Centro de Costo</h3>
+    <form method="GET">
+        <label for="centroFiltro">📍 Selecciona Centro de Costo:</label>
+        <select name="centro_costo" id="centroFiltro" onchange="this.form.submit()" required>
+            {% for centro in centros_costo %}
+                <option value="{{ centro }}" {% if centro == centro_seleccionado %}selected{% endif %}>{{ centro }}</option>
+            {% endfor %}
+        </select>
+    </form>
+
+    {% if centro_seleccionado %}
+    <div style="margin-top: 10px; text-align: right;">
+        <form method="GET" action="{{ url_for('descargar_excel', tabla='inventario_proyectos') }}">
+            <input type="hidden" name="centro_costo" value="{{ centro_seleccionado }}">
+            <button type="submit" class="btn btn-success btn-sm">⬇️ Descargar Excel</button>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if inventario_centro %}
+    <table border="1" width="100%" style="margin-top: 20px;">
+        <thead>
+            <tr>
+                <th>Producto</th>
+                <th>Cantidad Disponible en Proyecto</th>
+                <th>Última Solicitud</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in inventario_centro %}
+            <tr>
+                <td>{{ item.producto_nombre }}</td>
+                <td>{{ item.cantidad_actual }}</td>
+                <td>{{ item.ultima_solicitud.strftime('%d-%m-%Y') if item.ultima_solicitud else '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No hay productos actualmente disponibles para este centro de costo.</p>
+    {% endif %}
+</div>
+
+<!-- ESTILOS -->
 <style>
     .estado.operativo {
-        background-color: rgba(144, 238, 144, 0.5); /* Verde suave */
+        background-color: rgba(144, 238, 144, 0.5);
         color: #155724;
         font-weight: bold;
     }
+    .estado.deficiencia {
+        background-color: rgba(255, 255, 0, 0.5);
+        color: #856404;
+        font-weight: bold;
+    }
     .estado.no-operativo {
-        background-color: rgba(255, 99, 71, 0.5); /* Rojo suave */
+        background-color: rgba(255, 99, 71, 0.5);
         color: #721c24;
         font-weight: bold;
     }
+    .tab-container {
+        margin-bottom: 15px;
+        display: flex;
+        flex-direction: row;
+        border-bottom: 2px solid #ccc;
+    }
+    .tab-btn {
+        padding: 10px 15px;
+        margin-right: 5px;
+        background-color: #eee;
+        border: 1px solid #ccc;
+        border-bottom: none;
+        cursor: pointer;
+        font-weight: bold;
+        color: black;
+        border-top-left-radius: 8px;
+        border-top-right-radius: 8px;
+    }
+    .tab-btn.active {
+        background-color: #ccc;
+        color: black;
+        border-bottom: 2px solid white;
+    }
+    .tab-content {
+        display: none;
+    }
+    .tab-content.active {
+        display: block;
+    }
 </style>
 
+<!-- SCRIPTS -->
 <script>
-    function filtrarProductos() {
-        const filtroNombre = document.getElementById('buscarProducto').value.toLowerCase();
-        const filtroEstado = document.getElementById('filtroEstado').value;
-        const filas = document.querySelectorAll("#tablaInventario tr");
-        let stockDisponible = "";
+function filtrarProductos() {
+    const filtroNombre = document.getElementById('buscarProducto').value.toLowerCase();
+    const filtroEstado = document.getElementById('filtroEstado').value;
+    const filtroCategoria = document.getElementById('filtroCategoria').value.toLowerCase();
+    const filas = document.querySelectorAll("#tablaInventario tr");
 
-        filas.forEach(fila => {
-            const nombreProducto = fila.cells[1].innerText.toLowerCase();
-            const estadoProducto = fila.cells[5].innerText;
-            
-            const coincideNombre = nombreProducto.includes(filtroNombre);
-            const coincideEstado = filtroEstado === "" || estadoProducto === filtroEstado;
+    filas.forEach(fila => {
+        const nombre = fila.cells[1].innerText.toLowerCase();
+        const estado = fila.cells[5].innerText.trim();
+        const categoria = fila.cells[4].innerText.toLowerCase();
 
-            if (coincideNombre && coincideEstado) {
-                fila.style.display = "";
-                stockDisponible = fila.cells[2].innerText;
-            } else {
-                fila.style.display = "none";
-            }
-        });
+        const coincideNombre = nombre.includes(filtroNombre);
+        const coincideEstado = filtroEstado === "" || estado === filtroEstado;
+        const coincideCategoria = filtroCategoria === "" || categoria === filtroCategoria;
 
-        document.getElementById('stockDisponible').value = stockDisponible;
-    }
+        fila.style.display = coincideNombre && coincideEstado && coincideCategoria ? "" : "none";
+    });
+}
+
+function cambiarTab(tabId) {
+    const botones = document.querySelectorAll('.tab-btn');
+    const secciones = document.querySelectorAll('.tab-content');
+
+    botones.forEach(btn => btn.classList.remove('active'));
+    secciones.forEach(sec => sec.classList.remove('active'));
+
+    document.getElementById('tab-' + tabId).classList.add('active');
+    event.target.classList.add('active');
+}
 </script>
-
 {% endblock %}

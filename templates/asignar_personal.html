@@ -35,12 +35,24 @@
                     class="form-control form-control-sm"
                     oninvalid="this.setCustomValidity('Formato inválido. Usa 7 u 8 dígitos, guion y dígito verificador (Ej: 12345678-9)')"
                     oninput="this.setCustomValidity('')"><br>
+        <!-- ESPECIALIDAD -->
+            <label for="nuevo_especialidad">Especialidad:</label>
+            <select name="nuevo_especialidad" required style="margin-bottom: 8px;">
+                <option value="">Selecciona especialidad</option>
+                <option value="OOCC">OOCC</option>
+                <option value="ESTRUCTURA">ESTRUCTURA</option>
+                <option value="ANDAMIOS">ANDAMIOS</option>
+                <option value="SERVICIOS GENERALES">SERVICIOS GENERALES</option>
+                <option value="BODEGA">BODEGA</option>
+                <option value="OPERADORES">OPERADORES</option>
+            </select><br>
 
+        <!-- ROL -->
             <label for="nuevo_rol">Rol:</label>
             <select name="nuevo_rol" required style="margin-bottom: 8px;">
                 <option value="">Selecciona un rol</option>
                 <option value="trabajador">Trabajador</option>
-                <option value="terreno">Jefe de terreno</option>
+                <option value="jefeT">Jefe de terreno </option>
             </select><br>
 
             <select name="nuevo_genero" required style="margin-top: 8px;">
@@ -92,7 +104,7 @@
 
                 <!-- Mini tabla jefes de terreno -->
                 <div class="tabla-scroll" style="flex: 1 1 48%;">
-                    <h5>🧑‍💼 Jefes de Terreno</h5>
+                    <h5>🧑‍💼 Jefes </h5>
                     <table>
                         <thead>
                             <tr>
@@ -103,7 +115,8 @@
                             </tr>
                         </thead>
                         <tbody class="tabla-personal">
-                            {% for persona in lista_personal if persona.rol == 'terreno' %}
+                            {% for persona in lista_personal if persona.rol in ['jefeT', 'jefeB'] %}
+
                             <tr>
                                 <td><input type="checkbox" name="seleccionados" value="{{ persona.rut }}|{{ persona.nombre }}|{{ persona.apellido }}|{{ persona.rol }}"></td>
                                 <td>{{ persona.nombre }}</td>
@@ -239,7 +252,7 @@
 <script>
 function filtrarPersonal() {
     const input = document.getElementById('buscador').value.toLowerCase();
-    const filas = document.querySelectorAll('#tabla-personal tr');
+    const filas = document.querySelectorAll('.tabla-personal tr');
     filas.forEach(fila => {
         const texto = fila.textContent.toLowerCase();
         fila.style.display = texto.includes(input) ? '' : 'none';

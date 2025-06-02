@@ -3,26 +3,13 @@
 {% block title %}Adquisiciones{% endblock %}
 
 {% block content %}
-<h2>📦 Registro de Facturas</h2>
+<h2>📦 Adquisiciones</h2>
 
 <div class="contenedor-flex">
-    <!-- Formulario para agregar factura -->
-    <div class="formulario">
-        <h4>➕ Ingresar Nueva Factura</h4>
-        <form method="POST">
-            <input type="text" name="numero_factura" placeholder="Número de Factura" required><br>
-            <input type="date" name="fecha_factura" placeholder="Fecha de Factura" required><br>
-            <input type="text" name="rut_proveedor" placeholder="RUT del Proveedor" required><br>
-            <input type="text" name="nombre_proveedor" placeholder="Nombre del Proveedor" required><br>
-            <input type="number" name="orden_compra" placeholder="Orden de Compra (opcional)"><br>
-            <input type="number" name="monto_factura" placeholder="Monto de la Factura" step="0.01" required><br>
-            <button type="submit" name="registrar_factura" class="btn btn-primary mt-2">💾 Registrar Factura</button>
-        </form>
-    </div>
 
-    <!-- Tabla lateral para facturas sin OC -->
+    <!-- Completar Facturas Pendientes -->
     <div class="formulario">
-        <h4>📋 Facturas Pendientes de OC</h4>
+        <h4>🧾 Completar Facturas Pendientes</h4>
         {% if facturas_sin_oc %}
         <div class="tabla-scroll">
             <table>
@@ -30,8 +17,7 @@
                     <tr>
                         <th>N° Factura</th>
                         <th>Fecha</th>
-                        <th>Proveedor</th>
-                        <th>Asignar OC</th>
+                        <th>Completar</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -39,12 +25,13 @@
                     <tr>
                         <td>{{ factura.numero_factura }}</td>
                         <td>{{ factura.fecha_factura }}</td>
-                        <td>{{ factura.nombre_proveedor }}</td>
                         <td>
-                            <form method="POST" style="display: flex; gap: 5px;">
+                            <form method="POST" style="display: flex; flex-direction: column; gap: 5px;">
                                 <input type="hidden" name="factura_a_actualizar" value="{{ factura.numero_factura }}">
-                                <input type="number" name="nueva_oc" placeholder="OC" required style="width: 80px;">
-                                <button type="submit" name="asignar_oc" class="btn btn-sm btn-success">Asignar</button>
+                                <input type="number" name="nueva_oc" placeholder="OC" required>
+                                <input type="text" name="rut_proveedor" placeholder="RUT Proveedor" required>
+                                <input type="text" name="nombre_proveedor" placeholder="Nombre Proveedor" required>
+                                <button type="submit" name="asignar_oc" class="btn btn-sm btn-success">Actualizar</button>
                             </form>
                         </td>
                     </tr>
@@ -56,6 +43,46 @@
         <p class="text-muted">No hay facturas pendientes.</p>
         {% endif %}
     </div>
+
+    <!-- Completar órdenes de compra sin factura -->
+    <div class="formulario">
+        <h4>📝 Órdenes de Compra sin Factura</h4>
+        {% if ordenes_sin_factura %}
+        <div class="tabla-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Orden de Compra</th>
+                        <th>Monto</th>
+                        <th>Completar Factura</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for orden in ordenes_sin_factura %}
+                    <tr>
+                        <td>{{ orden.orden_compra }}</td>
+                        <td>${{ "{:,.0f}".format(orden.monto_factura or 0) }}</td>
+                        <td>
+                            <form method="POST" style="display: flex; flex-direction: column; gap: 5px;">
+                                <input type="hidden" name="orden_compra" value="{{ orden.orden_compra }}">
+                                <input type="text" name="numero_factura" placeholder="N° Factura" required>
+                                <input type="date" name="fecha_factura" required>
+                                <input type="text" name="rut_proveedor" placeholder="RUT Proveedor" required>
+                                <input type="text" name="nombre_proveedor" placeholder="Nombre Proveedor" required>
+                                <input type="number" name="monto_factura" placeholder="Monto" step="0.01" required>
+                                <button type="submit" name="registrar_factura" class="btn btn-sm btn-primary">Registrar</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">No hay órdenes de compra pendientes.</p>
+        {% endif %}
+    </div>
+
 </div>
 
 <!-- Flash de mensajes -->

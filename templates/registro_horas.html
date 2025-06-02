@@ -37,7 +37,6 @@
     </form>
 </div>
 
-
 <!-- FORMULARIO DE SELECCIÓN -->
 <form method="POST" class="form-section">
     <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
@@ -98,16 +97,31 @@
                         <div style="display: flex; flex-direction: column;">
                             <input type="text"
                                 name="hn_{{ persona[2] }}_{{ dia_key }}"
+                                id="hn_{{ persona[2] }}_{{ dia_key }}"
                                 pattern="^([0-9]{1,2}|[lLvVfFpP])?$"
                                 title="Horas (0–24) o L/V/F/P"
                                 placeholder="HN o L/V/F/P"
-                                class="form-control mb-1 hn_{{ dia_key }}">
+                                class="form-control mb-1 hn_{{ dia_key }}"
+                                oninput="mostrarCamposPermiso(this.value, '{{ persona[2] }}', '{{ dia_key }}')">
 
                             <input type="number"
                                 name="he_{{ persona[2] }}_{{ dia_key }}"
                                 min="0" max="24"
                                 placeholder="HE"
                                 class="form-control he_{{ dia_key }}">
+
+                            <div id="permiso_{{ persona[2] }}_{{ dia_key }}" style="display: none; margin-top: 5px;">
+                                <select name="tipo_permiso_{{ persona[2] }}_{{ dia_key }}" class="form-select mb-1" style="font-size: 0.85em;">
+                                    <option value="">Tipo de permiso</option>
+                                    <option value="Media jornada">Media jornada</option>
+                                    <option value="Jornada completa">Jornada completa</option>
+                                </select>
+                                <input type="text"
+                                    name="razon_permiso_{{ persona[2] }}_{{ dia_key }}"
+                                    placeholder="Motivo del permiso"
+                                    class="form-control"
+                                    style="font-size: 0.85em;">
+                            </div>
                         </div>
                         {% endif %}
                     </td>
@@ -160,5 +174,17 @@ function setDiaYEnviar(dia) {
     document.getElementById("dia_a_guardar").value = dia;
     return true;
 }
+
+function mostrarCamposPermiso(valor, rut, dia) {
+    const contenedor = document.getElementById(`permiso_${rut}_${dia}`);
+    if (valor.toUpperCase() === 'P') {
+        contenedor.style.display = 'block';
+    } else {
+        contenedor.style.display = 'none';
+    }
+}
 </script>
 {% endblock %}
+
+
+

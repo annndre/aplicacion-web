@@ -140,10 +140,20 @@
             <a href="{{ url_for('ver_inventario') }}">📦 Inventario</a>
             <a href="{{ url_for('gestionar_centros_costo') }}">⚙️ Centros de Costo</a>
             <a href="{{ url_for('adquisiciones') }}">📑 Adquisiciones</a>
-        {% elif session['rol'] == 'terreno' %}
+        {% elif session['rol'] == 'jefeT' %}
             <a href="{{ url_for('control_gastos') }}">💰 Control de Gastos</a>
             <a href="{{ url_for('ver_inventario') }}">📦 Inventario</a>
             <a href="{{ url_for('registro_horas') }}">🕒 Registro HH</a>
+
+        {% elif session['rol'] == 'jefeB' %}
+            <a href="{{ url_for('solicitudes') }}">📄 Solicitudes</a>
+            <a href="{{ url_for('devoluciones') }}">↩️ Devoluciones</a>
+            <a href="{{ url_for('entradas') }}">📥 Entradas</a>
+            <a href="{{ url_for('ver_inventario') }}">📦 Inventario</a>
+            <a href="{{ url_for('gestionar_centros_costo') }}">⚙️ Centros de Costo</a>
+            <a href="{{ url_for('adquisiciones') }}">📑 Adquisiciones</a>
+            <a href="{{ url_for('registro_horas') }}">🕒 Registro HH</a>
+
         {% endif %}
         <a href="{{ url_for('logout') }}">🚪 Cerrar Sesión</a>
     </nav>

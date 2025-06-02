@@ -19,7 +19,6 @@
 
             <label>🔎 Buscar o Ingresar Producto:</label>
             <input type="text" id="producto_nombre" name="producto_nombre" placeholder="Escribe o selecciona un producto" oninput="filtrarProductos()" required>
-            <!-- Campo oculto para enviar el ID si existe -->
             <input type="hidden" name="producto_id" id="producto_id">
             
             <label>📋 Seleccionar Producto Existente:</label>
@@ -40,16 +39,29 @@
             <input type="text" id="stock_disponible" disabled>
 
             <label>🏷️ Categoría:</label>
-            <input type="text" id="categoria" name="categoria" required>
+            <select id="categoria" name="categoria" required>
+                <option value="">-- Selecciona Categoría --</option>
+                <option value="ANDAMIO">ANDAMIO</option>
+                <option value="INSUMO">INSUMO</option>
+                <option value="EPP">EPP</option>
+                <option value="ASEO">ASEO</option>
+                <option value="HERRAMIENTA">HERRAMIENTA</option>
+                <option value="ARTICULO DE ASEO">ARTICULO DE ASEO</option>
+                <option value="ARTICULO DE OFICINA">ARTICULO DE OFICINA</option>
+                <option value="COMBUSTIBLE">COMBUSTIBLE</option>
+                <option value="ESTRUCTURAS METALICAS">ESTRUCTURAS METALICAS</option>
+                <option value="INDUMENTARIA">INDUMENTARIA</option>
+                <option value="ALIMENTO">ALIMENTO</option>
+            </select>
 
             <label>📏 Unidad (un, kg, lt, etc.):</label>
             <input type="text" name="unidad" required>
 
             <label>🔢 Cantidad a Ingresar:</label>
             <input type="number" name="cantidad" id="cantidad" min="1" required>
+
             <label>💰 Precio Unitario:</label>
             <input type="number" step="1" min="0" name="precio_unitario" required>
-
 
             <button type="submit" name="agregar_producto">➕ Agregar Producto</button>
         </form>
@@ -137,7 +149,6 @@ function filtrarProductos() {
     }
 
     if (!matchEncontrado) {
-        // Si es nuevo producto
         document.getElementById("producto_select").value = "";
         document.getElementById("producto_id").value = "";
         document.getElementById("stock_disponible").value = "";
@@ -165,6 +176,5 @@ function actualizarDatosProducto() {
     }
 }
 </script>
-
 
 {% endblock %}
