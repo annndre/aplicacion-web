@@ -904,26 +904,6 @@ def asignar_personal():
                     flash(f"✅ {nuevo_nombre} {nuevo_apellido} agregado a la base de datos con pago por hora ${pago_hora}.", "success")
             return redirect(url_for('asignar_personal'))
 
-        # 📅 Ingreso de datos del proyecto
-        elif 'guardar_ingreso_proyecto' in request.form:
-            centro_costo_ingreso = request.form.get('centro_costo_ingreso')
-            ingreso = request.form.get('ingreso')
-            fecha_inicio = request.form.get('fecha_inicio')
-            fecha_termino = request.form.get('fecha_termino')
-            margen = request.form.get('margen')
-
-            if not centro_costo_ingreso or not ingreso or not fecha_inicio or not fecha_termino:
-                flash("⚠️ Todos los campos del formulario de ingreso de proyecto son obligatorios.", "warning")
-            else:
-                with conexion.cursor() as cursor:
-                    cursor.execute("""
-                        INSERT INTO ingresocentrosdecosto (centro_costo, ingreso, fecha_inicio, fecha_termino, margen_esperado)
-                        VALUES (%s, %s, %s, %s, %s)
-                    """, (centro_costo_ingreso, ingreso, fecha_inicio, fecha_termino, margen))
-                    conexion.commit()
-                flash("✅ Información del proyecto registrada correctamente.", "success")
-            return redirect(url_for('asignar_personal'))
-
         # 📌 Asignar personal
         elif 'confirmar_asignacion' in request.form:
             centro_costo = request.form.get('centro_costo')

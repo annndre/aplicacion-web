@@ -90,7 +90,7 @@
                             </tr>
                         </thead>
                         <tbody class="tabla-personal">
-                            {% for persona in lista_personal if persona.rol == 'trabajador' %}
+                            {% for persona in lista_personal if persona.rol == 'Trabajador' %}
                             <tr>
                                 <td><input type="checkbox" name="seleccionados" value="{{ persona.rut }}|{{ persona.nombre }}|{{ persona.apellido }}|{{ persona.rol }}"></td>
                                 <td>{{ persona.nombre }}</td>
@@ -140,37 +140,6 @@
             </select>
 
             <button type="submit" name="confirmar_asignacion" style="margin-top: 15px;">📂 Guardar Cambios</button>
-        </form>
-    </div>
-
-
-    <!-- Cuadrante 3: Datos del proyecto -->
-    <div class="formulario" style="flex: 1 1 45%; padding: 15px;">
-        <h2>📈 Datos del Proyecto</h2>
-        <form method="POST">
-            <label>🏢 Centro de Costo:</label>
-            <select name="centro_costo_ingreso" required>
-                <option value="">-- Selecciona --</option>
-                {% for centro in centros_costo %}
-                <option value="{{ centro.id_proyecto }} - {{ centro.nombre_proyecto }}">
-                    {{ centro.id_proyecto }} - {{ centro.nombre_proyecto }}
-                </option>
-                {% endfor %}
-            </select>
-
-            <label>💰 Ingreso del Proyecto:</label>
-            <input type="number" name="ingreso" placeholder="Ingreso del Proyecto" required>
-
-            <label>📅 Fecha de Inicio:</label>
-            <input type="date" name="fecha_inicio" required>
-
-            <label>📅 Fecha de Término:</label>
-            <input type="date" name="fecha_termino" required>
-
-            <label>📊 Margen Esperado (%):</label>
-            <input type="number" step="any" name="margen" placeholder="Margen Esperado">
-
-            <button type="submit" name="guardar_ingreso_proyecto" style="margin-top: 10px;">📂 Guardar Proyecto</button>
         </form>
     </div>
 
