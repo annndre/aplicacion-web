@@ -847,7 +847,7 @@ def control_gastos():
 # RUTA PARA ASIGNAR PERSONAL
 @app.route('/asignar_personal', methods=['GET', 'POST']) 
 def asignar_personal():
-    if 'usuario' not in session or session.get('rol') not in ['admin']:
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeT']:
         flash("No tienes acceso a esta página", "danger")
         return redirect(url_for('login'))
 

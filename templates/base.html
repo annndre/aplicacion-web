@@ -141,6 +141,7 @@
             <a href="{{ url_for('gestionar_centros_costo') }}">⚙️ Centros de Costo</a>
             <a href="{{ url_for('adquisiciones') }}">📑 Adquisiciones</a>
         {% elif session['rol'] == 'jefeT' %}
+            <a href="{{ url_for('asignar_personal') }}">🧑‍💼 Asignar Personal</a>
             <a href="{{ url_for('control_gastos') }}">💰 Control de Gastos</a>
             <a href="{{ url_for('ver_inventario') }}">📦 Inventario</a>
             <a href="{{ url_for('registro_horas') }}">🕒 Registro HH</a>
