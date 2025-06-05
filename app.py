@@ -719,7 +719,6 @@ def gestionar_centros_costo():
 
 #######################################################################################################################
 # RUTA PARA CONTROL DE GASTOS
-# RUTA PARA CONTROL DE GASTOS
 @app.route('/control_gastos', methods=['GET', 'POST'])
 def control_gastos():
     if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeT']:
@@ -727,24 +726,15 @@ def control_gastos():
         return redirect(url_for('login'))
 
     conexion = obtener_conexion()
-    rol_usuario = session.get('rol')
     centros_costo = []
 
     with conexion.cursor() as cursor:
-        if rol_usuario in ['jefeT', 'jefeB']:
-            rut_usuario = session.get('rut')
-            cursor.execute("""
-                SELECT DISTINCT centro_costo
-                FROM asignacion_personal
-                WHERE rut = %s AND rol = %s
-            """, (rut_usuario, rol_usuario))
-            centros_costo = [row[0] for row in cursor.fetchall()]
-        else:  # admin
-            cursor.execute("""
-                SELECT DISTINCT centro_costo
-                FROM asignacion_personal
-            """)
-            centros_costo = [row[0] for row in cursor.fetchall()]
+        # ✅ TODOS ven todos los centros de costo asignados
+        cursor.execute("""
+            SELECT DISTINCT centro_costo
+            FROM asignacion_personal
+        """)
+        centros_costo = [row[0] for row in cursor.fetchall()]
 
     # Registro de gastos (cuando se envía el formulario)
     if request.method == 'POST' and 'confirmar_adquisiciones' in request.form:
@@ -852,7 +842,6 @@ def control_gastos():
         mostrar_descarga=True,
         url_descarga="/descargar_excel/gastos"
     )
-
 
 #####################################################################################################
 # RUTA PARA ASIGNAR PERSONAL
@@ -1031,21 +1020,12 @@ def registro_horas():
     dias_bloqueados = {}
     resumen = {}
 
-    rol_usuario = session.get('rol')
     centros_costo = []
 
+    # ✅ Mostrar todos los centros de costo disponibles sin restricción
     with conexion.cursor() as cursor:
-        if rol_usuario in ['jefeT', 'jefeB']:
-            rut_usuario = session.get('rut')
-            cursor.execute("""
-                SELECT DISTINCT centro_costo
-                FROM asignacion_personal
-                WHERE rut = %s
-            """, (rut_usuario,))
-            centros_costo = [row[0] for row in cursor.fetchall()]
-        else:
-            cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal")
-            centros_costo = [row[0] for row in cursor.fetchall()]
+        cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal ORDER BY centro_costo")
+        centros_costo = [row[0] for row in cursor.fetchall()]
 
     if request.method == 'POST':
         if 'guardar_semana' in request.form:
