@@ -565,29 +565,21 @@ def ver_inventario():
 
     centros_costo = []
     centro_seleccionado = request.args.get('centro_costo')
+    producto_buscado = request.args.get('producto_buscado')
     inventario = []
     inventario_centro = []
-    productos = []
+    inventario_filtrado = []
     categorias = []
 
     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
         cursor.execute("SELECT * FROM productos")
         inventario = cursor.fetchall()
-        productos = inventario
 
         cursor.execute("SELECT DISTINCT categoria FROM productos ORDER BY categoria")
         categorias = [row[0] for row in cursor.fetchall()]
 
-        if rol_usuario == 'jefeT':
-            cursor.execute("""
-                SELECT DISTINCT centro_costo
-                FROM asignacion_personal
-                WHERE rut = %s
-            """, (rut_usuario,))
-            centros_costo = [row[0] for row in cursor.fetchall()]
-        else:
-            cursor.execute("SELECT DISTINCT centro_costo FROM historial_solicitudes")
-            centros_costo = [row[0] for row in cursor.fetchall()]
+        cursor.execute("SELECT DISTINCT centro_costo FROM historial_solicitudes")
+        centros_costo = [row[0] for row in cursor.fetchall()]
 
         if centro_seleccionado:
             cursor.execute("""
@@ -602,6 +594,20 @@ def ver_inventario():
             """, (centro_seleccionado,))
             inventario_centro = cursor.fetchall()
 
+        if producto_buscado:
+            cursor.execute("""
+                SELECT hs.centro_costo,
+                       hs.producto_nombre,
+                       COALESCE(SUM(hs.cantidad), 0) - COALESCE(SUM(hd.cantidad), 0) AS cantidad_actual,
+                       MAX(hs.fecha_solicitud) AS ultima_solicitud
+                FROM historial_solicitudes hs
+                LEFT JOIN historial_devoluciones hd 
+                    ON hs.producto_id = hd.producto_id AND hs.centro_costo = hd.centro_costo
+                WHERE hs.producto_nombre ILIKE %s
+                GROUP BY hs.centro_costo, hs.producto_nombre
+            """, (f"%{producto_buscado}%",))
+            inventario_filtrado = cursor.fetchall()
+
     tab_activa = request.args.get('tab_activa', 'general')
 
     return render_template(
@@ -610,12 +616,13 @@ def ver_inventario():
         centros_costo=centros_costo,
         centro_seleccionado=centro_seleccionado,
         inventario_centro=inventario_centro,
+        inventario_filtrado=inventario_filtrado,
+        producto_buscado=producto_buscado,
         categorias=categorias,
         mostrar_descarga=True,
         url_descarga="/descargar_excel/inventario",
-        tab_activa='centros' if centro_seleccionado else 'general',
+        tab_activa='centros' if centro_seleccionado or producto_buscado else 'general',
         rol_usuario=rol_usuario
-
     )
 
 
@@ -627,23 +634,59 @@ def editar_estado_producto():
 
     producto_id = request.form.get('producto_id')
     nuevo_estado = request.form.get('nuevo_estado')
+    cantidad_modificada = request.form.get('cantidad_modificada')
 
-    if not producto_id or not nuevo_estado:
+    if not producto_id or not nuevo_estado or not cantidad_modificada:
         flash("Faltan datos para actualizar el estado del producto.", "warning")
         return redirect(url_for('ver_inventario'))
 
+    try:
+        cantidad_modificada = int(cantidad_modificada)
+    except ValueError:
+        flash("La cantidad debe ser un número válido.", "warning")
+        return redirect(url_for('ver_inventario'))
+
     conexion = obtener_conexion()
-    with conexion.cursor() as cursor:
+    with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+        # Obtener producto original
+        cursor.execute("SELECT * FROM productos WHERE id = %s", (producto_id,))
+        producto = cursor.fetchone()
+
+        if not producto:
+            flash("Producto no encontrado.", "danger")
+            return redirect(url_for('ver_inventario'))
+
+        stock_actual = producto['stock_disponible']
+        if cantidad_modificada > stock_actual:
+            flash("La cantidad modificada no puede ser mayor al stock disponible.", "warning")
+            return redirect(url_for('ver_inventario'))
+
+        # Descontar cantidad del producto original
+        nuevo_stock = stock_actual - cantidad_modificada
         cursor.execute("""
             UPDATE productos
-            SET estado = %s
+            SET stock_disponible = %s
             WHERE id = %s
-        """, (nuevo_estado, producto_id))
+        """, (nuevo_stock, producto_id))
+
+        # Insertar nuevo registro con el nuevo estado y misma base
+        cursor.execute("""
+            INSERT INTO productos (
+                producto_nombre, stock_disponible, stock_critico, categoria, estado, producto_base_id
+            ) VALUES (%s, %s, %s, %s, %s, %s)
+        """, (
+            producto['producto_nombre'],
+            cantidad_modificada,
+            producto['stock_critico'],
+            producto['categoria'],
+            nuevo_estado,
+            producto['producto_base_id'] or producto['id']
+        ))
+
         conexion.commit()
 
-    flash("✅ Estado del producto actualizado correctamente.", "success")
+    flash("✅ Estado y cantidad modificados correctamente. Se creó un nuevo registro con el nuevo estado.", "success")
     return redirect(url_for('ver_inventario'))
-
 
 ########################################################################################################################
 
@@ -1347,7 +1390,8 @@ def descargar_excel(tabla):
         if not centro_costo or centro_costo.strip() == "":
             return "Debes seleccionar un centro de costo antes de descargar.", 400
 
-        nombre_centro = centro_costo.split(" - ", 1)[1] if " - " in centro_costo else centro_costo
+        nombre_centro = centro_costo
+
 
         with conexion.cursor() as cursor:
             cursor.execute("""

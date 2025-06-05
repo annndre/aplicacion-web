@@ -7,8 +7,8 @@
 
 <!-- Pestañas -->
 <div class="tab-container">
-    <button class="tab-btn {% if tab_activa != 'centros' %}active{% endif %}" onclick="cambiarTab('general')">📦 Inventario General</button>
-    <button class="tab-btn {% if tab_activa == 'centros' %}active{% endif %}" onclick="cambiarTab('centros')">🏧 Por Centro de Costo</button>
+    <button class="tab-btn {% if tab_activa != 'centros' %}active{% endif %}" onclick="cambiarTab('general')">📦 Inventario en casa matriz bodega</button>
+    <button class="tab-btn {% if tab_activa == 'centros' %}active{% endif %}" onclick="cambiarTab('centros')"> Inventario Por Centro de Costo</button>
 </div>
 
 <!-- TAB 1: Inventario General -->
@@ -66,34 +66,78 @@
                 <td>
                     <form method="POST" action="{{ url_for('editar_estado_producto') }}" style="display: flex; align-items: center; gap: 4px;">
                         <input type="hidden" name="producto_id" value="{{ producto.id }}">
-                        <select name="nuevo_estado" style="font-size: 12px; padding: 2px;" required>
-                            <option value="OPERATIVO" {% if producto.estado == 'OPERATIVO' %}selected{% endif %}>🟢</option>
-                            <option value="OPERATIVO CON DEFICIENCIA" {% if producto.estado == 'OPERATIVO CON DEFICIENCIA' %}selected{% endif %}>🟡</option>
-                            <option value="NO OPERATIVO" {% if producto.estado == 'NO OPERATIVO' %}selected{% endif %}>🔴</option>
-                        </select>
-                    <button type="submit" style="font-size: 12px; padding: 1px 6px;">✔️</button>
+                        <!-- Cantidad a modificar -->
+                         <input type="number" name="cantidad_modificada" min="1" max="{{ producto.stock_disponible }}" required
+                        style="width: 70px; font-size: 12px; padding: 2px;">
+
+                        <!-- Estado nuevo -->
+                         <select name="nuevo_estado" style="font-size: 12px; padding: 2px;" required>
+                            <option value="OPERATIVO" {% if producto.estado == 'OPERATIVO' %}selected{% endif %} style="background-color: #b3ebc0; color: #155724; font-weight: bold;">
+                                OPERATIVO
+                            </option>
+                            <option value="OPERATIVO CON DEFICIENCIA" {% if producto.estado == 'OPERATIVO CON DEFICIENCIA' %}selected{% endif %} style="background-color: #fce8a7; color: #856404; font-weight: bold;">
+                                OPERATIVO CON DEFICIENCIA
+                            </option>
+                            <option value="NO OPERATIVO" {% if producto.estado == 'NO OPERATIVO' %}selected{% endif %} style="background-color: #e98b93; color: #721c24; font-weight: bold;">
+                                NO OPERATIVO
+                            </option>
+                         </select>
+                         <button type="submit" style="font-size: 12px; padding: 1px 6px;">✔️</button>
                     </form>
                 </td>
-
                 {% endif %}
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+</div>
 
 <!-- TAB 2: Por Centro de Costo -->
 <div id="tab-centros" class="tab-content {% if tab_activa == 'centros' %}active{% endif %}">
     <h3>🏧 Inventario por Centro de Costo</h3>
-    <form method="GET">
-        <label for="centroFiltro">📍 Selecciona Centro de Costo:</label>
-        <select name="centro_costo" id="centroFiltro" onchange="this.form.submit()" required>
-            {% for centro in centros_costo %}
-                <option value="{{ centro }}" {% if centro == centro_seleccionado %}selected{% endif %}>{{ centro }}</option>
-            {% endfor %}
-        </select>
-    </form>
 
+    {% if centros_costo|length == 0 %}
+        <p style="color: red;">⚠️ No hay centros de costo con historial disponible.</p>
+    {% else %}
+
+    <!-- Formulario de selección y búsqueda -->
+    <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 15px;">
+        <!-- Selector de centro de costo -->
+        <form method="GET" style="display: flex; align-items: center;">
+            <label for="centroFiltro" style="margin-right: 8px;">📍 Centro de Costo:</label>
+            <select name="centro_costo" id="centroFiltro" onchange="this.form.submit()" required>
+                <option value="">-- Selecciona --</option>
+                {% for centro in centros_costo %}
+                    <option value="{{ centro }}" {% if centro == centro_seleccionado %}selected{% endif %}>{{ centro }}</option>
+                {% endfor %}
+            </select>
+            <input type="hidden" name="tab_activa" value="centros">
+        </form>
+
+        <!-- Buscador de producto -->
+        <form method="GET" style="display: flex; align-items: center;">
+            <label for="busquedaProducto" style="margin-left: 8px; margin-right: 8px;">🔍 Producto:</label>
+            <input type="text" name="producto_buscado" id="busquedaProducto" placeholder="Ej: taladro, cable..." value="{{ producto_buscado or '' }}">
+            <input type="hidden" name="tab_activa" value="centros">
+            <button type="submit" class="btn btn-sm btn-primary" style="margin-left: 6px;">Buscar</button>
+        </form>
+    </div>
+
+    <!-- Resultados búsqueda -->
+    {% if inventario_filtrado %}
+        <div style="margin-bottom: 15px;">
+            <p><strong>Resultados encontrados:</strong></p>
+            <ul>
+                {% for res in inventario_filtrado %}
+                    <li>{{ res.producto_nombre }} → {{ res.centro_costo }} ({{ res.cantidad_actual }} unidades)</li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+
+    <!-- Botón de descarga -->
     {% if centro_seleccionado %}
     <div style="margin-top: 10px; text-align: right;">
         <form method="GET" action="{{ url_for('descargar_excel', tabla='inventario_proyectos') }}">
@@ -103,27 +147,33 @@
     </div>
     {% endif %}
 
+    <!-- Tabla de inventario del centro -->
     {% if inventario_centro %}
-    <table border="1" width="100%" style="margin-top: 20px;">
-        <thead>
-            <tr>
-                <th>Producto</th>
-                <th>Cantidad Disponible en Proyecto</th>
-                <th>Última Solicitud</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in inventario_centro %}
-            <tr>
-                <td>{{ item.producto_nombre }}</td>
-                <td>{{ item.cantidad_actual }}</td>
-                <td>{{ item.ultima_solicitud.strftime('%d-%m-%Y') if item.ultima_solicitud else '' }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div style="max-height: 400px; overflow-y: auto; margin-top: 20px;">
+        <table border="1" width="100%">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Cantidad Disponible en Proyecto</th>
+                    <th>Última Solicitud</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in inventario_centro %}
+                <tr>
+                    <td>{{ item.producto_nombre }}</td>
+                    <td>{{ item.cantidad_actual }}</td>
+                    <td>{{ item.ultima_solicitud.strftime('%d-%m-%Y') if item.ultima_solicitud else '' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
     {% else %}
-    <p>No hay productos actualmente disponibles para este centro de costo.</p>
+        {% if centro_seleccionado %}
+        <p>No hay productos actualmente disponibles para este centro de costo.</p>
+        {% endif %}
+    {% endif %}
     {% endif %}
 </div>
 
