@@ -1074,10 +1074,8 @@ def registro_horas():
 
             with conexion.cursor() as cursor:
                 cursor.execute("""
-                    SELECT rut, nombre, apellido FROM personal
-                    WHERE rut IN (
-                        SELECT rut FROM asignacion_personal WHERE centro_costo = %s
-                    )
+                    SELECT rut, nombre, apellido FROM asignacion_personal
+                    WHERE centro_costo = %s
                 """, (centro_costo,))
                 personas = cursor.fetchall()
 
@@ -1124,12 +1122,14 @@ def registro_horas():
                         elif hn_val == '':
                             horas_normales = 0
                         else:
-                            horas_normales = int(hn_val)
+                            horas_normales = round(float(hn_val.replace(',', '.')), 1)
+                            if horas_normales < 0 or horas_normales > 24 or (horas_normales * 10) % 1 != 0:
+                                flash(f"⚠️ Horas normales inválidas (máx. 1 decimal) para {rut}", "warning")
+                                continue
 
                         horas_extras = int(he_val) if he_val != '' else 0
-
-                        if horas_normales < 0 or horas_normales > 24 or horas_extras < 0 or horas_extras > 24:
-                            flash(f"⚠️ Error en las horas para {rut}", "warning")
+                        if horas_extras < 0 or horas_extras > 24:
+                            flash(f"⚠️ Horas extras inválidas para {rut}", "warning")
                             continue
 
                         cursor.execute("""
@@ -1156,7 +1156,7 @@ def registro_horas():
                               usuario, observacion, dias_trabajados, observacionP))
 
                     except ValueError:
-                        flash(f"⚠️ Error en las horas para {rut}", "warning")
+                        flash(f"⚠️ Error en formato de horas para {rut}", "warning")
 
             conexion.commit()
             flash("✅ Día registrado exitosamente. Ese día queda bloqueado.", "success")
@@ -1189,10 +1189,8 @@ def registro_horas():
 
                     with conexion.cursor() as cursor:
                         cursor.execute("""
-                            SELECT nombre, apellido, rut FROM personal
-                            WHERE rut IN (
-                                SELECT rut FROM asignacion_personal WHERE centro_costo = %s
-                            )
+                            SELECT nombre, apellido, rut FROM asignacion_personal
+                            WHERE centro_costo = %s
                         """, (centro_costo_actual,))
                         trabajadores = cursor.fetchall()
 

@@ -75,7 +75,7 @@
                         {{ nombre }}<br>
                         <span class="text-muted small">{{ fechas_por_dia[dia_key]|default('') }}</span><br>
                         {% if fechas_por_dia[dia_key]|default('') not in dias_bloqueados %}
-                        <input type="number" min="0" max="24" placeholder="Rellenar día" oninput="rellenarDia('{{ dia_key }}', this.value)" style="width: 100%;">
+                        <input type="number" min="0" max="24" step="0.1" placeholder="Rellenar día" oninput="rellenarDia('{{ dia_key }}', this.value)" style="width: 100%;">
                         {% endif %}
                     </th>
                     {% endfor %}
@@ -98,8 +98,8 @@
                             <input type="text"
                                 name="hn_{{ persona[2] }}_{{ dia_key }}"
                                 id="hn_{{ persona[2] }}_{{ dia_key }}"
-                                pattern="^([0-9]{1,2}|[lLvVfFpP])?$"
-                                title="Horas (0–24) o L/V/F/P"
+                                pattern="^([0-9]{1,2}([.,][0-9])?|[lLvVfFpP])?$"
+                                title="Ej: 8, 7.5, 7,5 o L/V/F/P"
                                 placeholder="HN o L/V/F/P"
                                 class="form-control mb-1 hn_{{ dia_key }}"
                                 oninput="mostrarCamposPermiso(this.value, '{{ persona[2] }}', '{{ dia_key }}')">
