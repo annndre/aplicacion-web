@@ -3,68 +3,84 @@
 {% block title %}📈 Estadísticas{% endblock %}
 
 {% block content %}
-<h2>📈 Estadísticas por Centro de Costo</h2>
+<h2>📈 Estadísticas por Centro de Costo y Especialidad</h2>
 
-<!-- Formulario de selección -->
-<form method="POST" style="margin-bottom: 20px;">
-    <label for="centro_costo">Selecciona un centro de costo:</label>
-    <select name="centro_costo" id="centro_costo" required style="width: 250px; padding: 8px;">
-        <option value="" disabled selected>-- Seleccionar --</option>
-        {% for centro in centros_costo %}
-            <option value="{{ centro }}" {% if centro == centro_seleccionado %}selected{% endif %}>{{ centro }}</option>
-        {% endfor %}
-    </select>
-    <button type="submit">🔍 Ver Estadísticas</button>
+<!-- FORMULARIOS -->
+<form method="POST" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 20px;">
+    <!-- Centro de Costo -->
+    <div>
+        <label for="centro_costo">Selecciona un centro de costo:</label><br>
+        <select name="centro_costo" id="centro_costo" style="width: 250px; padding: 8px;">
+            <option value="">-- Todos --</option>
+            {% for centro in centros_costo %}
+                <option value="{{ centro }}" {% if centro == centro_seleccionado %}selected{% endif %}>{{ centro }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <!-- Especialidad -->
+    <div>
+        <label for="especialidad">Selecciona una especialidad:</label><br>
+        <select name="especialidad" id="especialidad" style="width: 250px; padding: 8px;">
+            <option value="">-- Todas --</option>
+            {% for esp in especialidades %}
+                <option value="{{ esp }}" {% if esp == especialidad_seleccionada %}selected{% endif %}>{{ esp }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div style="align-self: flex-end;">
+        <button type="submit">🔍 Ver Estadísticas</button>
+    </div>
 </form>
 
-{% if centro_seleccionado and datos %}
-    <div style="border: 1px solid #ccc; border-radius: 10px; padding: 20px; background-color: #f9f9f9;">
-        <h4>Centro de Costo Seleccionado: <strong>{{ centro_seleccionado }}</strong></h4>
-
-        <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-                <thead style="background-color: #e8e8e8;">
-                    <tr>
-                        <th style="padding: 10px; border: 1px solid #ccc;">#</th>
-                        <th style="padding: 10px; border: 1px solid #ccc;">Nombre</th>
-                        <th style="padding: 10px; border: 1px solid #ccc;">Apellido</th>
-                        <th style="padding: 10px; border: 1px solid #ccc;">RUT</th>
-                        <th style="padding: 10px; border: 1px solid #ccc;">Horas Normales</th>
-                        <th style="padding: 10px; border: 1px solid #ccc;">Horas Extras</th>
-                        <th style="padding: 10px; border: 1px solid #ccc;">Días Trabajados</th>
-                        <th style="padding: 10px; border: 1px solid #ccc;">Licencias</th>
-                        <th style="padding: 10px; border: 1px solid #ccc;">Permisos</th>
-                        <th style="padding: 10px; border: 1px solid #ccc;">Fallas</th>
-                        <th style="padding: 10px; border: 1px solid #ccc;">Vacaciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for persona in datos %}
-                    <tr style="border-bottom: 1px solid #ccc;">
-                        <td style="padding: 8px;">{{ loop.index }}</td>
-                        <td style="padding: 8px;">{{ persona.nombre }}</td>
-                        <td style="padding: 8px;">{{ persona.apellido }}</td>
-                        <td style="padding: 8px;">{{ persona.rut }}</td>
-                        <td style="padding: 8px;">{{ persona.total_hn or 0 }}</td>
-                        <td style="padding: 8px;">{{ persona.total_he or 0 }}</td>
-                        <td style="padding: 8px;">{{ persona.dias_trabajados or 0 }}</td>
-                        <td style="padding: 8px;">{{ persona.licencias or 0 }}</td>
-                        <td style="padding: 8px;">{{ persona.permisos or 0 }}</td>
-                        <td style="padding: 8px;">{{ persona.fallas or 0 }}</td>
-                        <td style="padding: 8px;">{{ persona.vacaciones or 0 }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+<!-- RESULTADOS -->
+{% if datos %}
+<div style="border: 1px solid #ccc; border-radius: 10px; padding: 20px; background-color: #f9f9f9;">
+    <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+            <thead style="background-color: #e8e8e8;">
+                <tr>
+                    <th>#</th>
+                    <th>Nombre</th>
+                    <th>Apellido</th>
+                    <th>RUT</th>
+                    <th>Horas Normales</th>
+                    <th>Horas Extras</th>
+                    <th>Días Trabajados</th>
+                    <th>Licencias</th>
+                    <th>Permisos</th>
+                    <th>Fallas</th>
+                    <th>Vacaciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for persona in datos %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ persona.nombre }}</td>
+                    <td>{{ persona.apellido }}</td>
+                    <td>{{ persona.rut }}</td>
+                    <td>{{ persona.total_hn or 0 }}</td>
+                    <td>{{ persona.total_he or 0 }}</td>
+                    <td>{{ persona.dias_trabajados or 0 }}</td>
+                    <td>{{ persona.licencias or 0 }}</td>
+                    <td>{{ persona.permisos or 0 }}</td>
+                    <td>{{ persona.fallas or 0 }}</td>
+                    <td>{{ persona.vacaciones or 0 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
-{% elif centro_seleccionado %}
-    <div style="margin-top: 20px; color: #555; font-weight: bold;">
-        ⚠️ No se encontraron registros de horas para este centro de costo.
-    </div>
+</div>
+{% elif centro_seleccionado or especialidad_seleccionada %}
+<div style="margin-top: 20px; color: #555; font-weight: bold;">
+    ⚠️ No se encontraron registros de horas para estos filtros.
+</div>
 {% else %}
-    <div style="margin-top: 20px; color: gray; font-style: italic;">
-        ℹ️ Pestaña en proceso. Selecciona un centro de costo para comenzar a ver estadísticas.
-    </div>
+<div style="margin-top: 20px; color: gray; font-style: italic;">
+    ℹ️ Pestaña en proceso. Selecciona un filtro para comenzar a ver estadísticas.
+</div>
 {% endif %}
 {% endblock %}

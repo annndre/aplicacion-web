@@ -5,6 +5,11 @@
 {% block content %}
 <h2>Registro de Horas</h2>
 
+<!-- MENSAJE DE EDICIÓN PERMITIDA -->
+<div class="alert alert-info mt-3" role="alert">
+  Solo se pueden editar los días de la semana en curso antes del viernes.
+</div>
+
 <!-- BLOQUE DE MENSAJES FLASH -->
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
@@ -86,9 +91,7 @@
                     <th>
                         {{ nombre }}<br>
                         <span class="text-muted small">{{ fechas_por_dia[dia_key]|default('') }}</span><br>
-                        {% if fechas_por_dia[dia_key]|default('') not in dias_bloqueados %}
                         <input type="number" min="0" max="24" step="0.1" placeholder="Rellenar día" oninput="rellenarDia('{{ dia_key }}', this.value)" style="width: 100%;">
-                        {% endif %}
                     </th>
                     {% endfor %}
                 </tr>
@@ -103,39 +106,39 @@
                     {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie'] %}
                     <td>
                         {% set fecha_dia = fechas_por_dia[dia_key]|default('') %}
-                        {% if fecha_dia in dias_bloqueados %}
-                            <span style="color: green; font-weight: bold;">✅ Día registrado</span>
-                        {% else %}
+                        {% set rut = persona[2] %}
+                        {% set datos = valores_guardados.get(rut, {}).get(dia_key, {}) %}
                         <div style="display: flex; flex-direction: column;">
                             <input type="text"
-                                name="hn_{{ persona[2] }}_{{ dia_key }}"
-                                id="hn_{{ persona[2] }}_{{ dia_key }}"
+                                name="hn_{{ rut }}_{{ dia_key }}"
+                                id="hn_{{ rut }}_{{ dia_key }}"
                                 pattern="^([0-9]{1,2}([.,][0-9])?|[lLvVfFpP])?$"
                                 title="Ej: 8, 7.5, 7,5 o L/V/F/P"
                                 placeholder="HN o L/V/F/P"
                                 class="form-control mb-1 hn_{{ dia_key }}"
-                                oninput="mostrarCamposPermiso(this.value, '{{ persona[2] }}', '{{ dia_key }}')">
+                                value="{{ datos.hn if datos else '' }}"
+                                oninput="mostrarCamposPermiso(this.value, '{{ rut }}', '{{ dia_key }}')">
 
                             <input type="number"
-                                name="he_{{ persona[2] }}_{{ dia_key }}"
+                                name="he_{{ rut }}_{{ dia_key }}"
                                 min="0" max="24"
                                 placeholder="HE"
-                                class="form-control he_{{ dia_key }}">
+                                class="form-control he_{{ dia_key }}"
+                                value="{{ datos.he if datos else '' }}">
 
-                            <div id="permiso_{{ persona[2] }}_{{ dia_key }}" style="display: none; margin-top: 5px;">
-                                <select name="tipo_permiso_{{ persona[2] }}_{{ dia_key }}" class="form-select mb-1" style="font-size: 0.85em;">
+                            <div id="permiso_{{ rut }}_{{ dia_key }}" style="display: none; margin-top: 5px;">
+                                <select name="tipo_permiso_{{ rut }}_{{ dia_key }}" class="form-select mb-1" style="font-size: 0.85em;">
                                     <option value="">Tipo de permiso</option>
                                     <option value="Media jornada">Media jornada</option>
                                     <option value="Jornada completa">Jornada completa</option>
                                 </select>
                                 <input type="text"
-                                    name="razon_permiso_{{ persona[2] }}_{{ dia_key }}"
+                                    name="razon_permiso_{{ rut }}_{{ dia_key }}"
                                     placeholder="Motivo del permiso"
                                     class="form-control"
                                     style="font-size: 0.85em;">
                             </div>
                         </div>
-                        {% endif %}
                     </td>
                     {% endfor %}
                 </tr>
@@ -146,12 +149,9 @@
                     <td></td>
                     {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie'] %}
                     <td>
-                        {% set fecha_dia = fechas_por_dia[dia_key]|default('') %}
-                        {% if fecha_dia not in dias_bloqueados %}
                         <button type="submit" class="btn btn-primary btn-sm w-100 mt-2" onclick="return setDiaYEnviar('{{ dia_key }}')">
                             Guardar {{ dia_key|capitalize }}
                         </button>
-                        {% endif %}
                     </td>
                     {% endfor %}
                 </tr>
