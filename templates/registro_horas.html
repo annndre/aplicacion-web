@@ -5,6 +5,18 @@
 {% block content %}
 <h2>Registro de Horas</h2>
 
+<!-- BLOQUE DE MENSAJES FLASH -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'warning' if category == 'warning' else category }} alert-dismissible fade show mt-3" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
 <style>
     tbody tr:nth-child(odd) {
         background-color: #fff4e6;
@@ -185,6 +197,3 @@ function mostrarCamposPermiso(valor, rut, dia) {
 }
 </script>
 {% endblock %}
-
-
-

@@ -4,7 +4,6 @@
 
 {% block content %}
 <!-- Botón Exportar Excel -->
-<!-- 📅 Exportar Personal por Centro de Costo -->
 <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
     <form method="GET" action="{{ url_for('descargar_excel', tabla='asignacion_personal') }}" style="display: flex; gap: 10px; align-items: center;">
         <label for="centro_costo_export" style="margin-bottom: 0; font-weight: bold;">Exportar Personal:</label>
@@ -25,17 +24,18 @@
     <div class="formulario" style="flex: 1 1 45%; padding: 15px;">
         <h2>➕ Agregar Nuevo Personal</h2>
         <form method="POST">
-            <input type="text" name="nuevo_nombre" placeholder="Nombre" required><br>
-            <input type="text" name="nuevo_apellido" placeholder="Apellido" required><br>
+            <input type="text" name="nuevo_nombre" placeholder="Nombres (ej: Juan Carlos)" required><br>
+            <input type="text" name="nuevo_apellido" placeholder="Apellidos (ej: Soto Álvarez)" required><br>
+
             <label for="nuevo_rut">🆔 RUT (sin puntos, con guión):</label>
             <input type="text" id="nuevo_rut" name="nuevo_rut"
-                    pattern="^\d{7,8}-[\dkK]$"
-                    placeholder="Ej: 12345678-9"
-                    required
-                    class="form-control form-control-sm"
-                    oninvalid="this.setCustomValidity('Formato inválido. Usa 7 u 8 dígitos, guion y dígito verificador (Ej: 12345678-9)')"
-                    oninput="this.setCustomValidity('')"><br>
-        <!-- ESPECIALIDAD -->
+                   pattern="^\d{7,8}-[\dkK]$"
+                   placeholder="Ej: 12345678-9"
+                   required
+                   class="form-control form-control-sm"
+                   oninvalid="this.setCustomValidity('Formato inválido. Usa 7 u 8 dígitos, guion y dígito verificador (Ej: 12345678-9)')"
+                   oninput="this.setCustomValidity('')"><br>
+
             <label for="nuevo_especialidad">Especialidad:</label>
             <select name="nuevo_especialidad" required style="margin-bottom: 8px;">
                 <option value="">Selecciona especialidad</option>
@@ -47,12 +47,11 @@
                 <option value="OPERADORES">OPERADORES</option>
             </select><br>
 
-        <!-- ROL -->
             <label for="nuevo_rol">Rol:</label>
             <select name="nuevo_rol" required style="margin-bottom: 8px;">
                 <option value="">Selecciona un rol</option>
                 <option value="Trabajador">Trabajador</option>
-                <option value="jefeT">Jefe de terreno </option>
+                <option value="jefeT">Jefe de terreno</option>
             </select><br>
 
             <select name="nuevo_genero" required style="margin-top: 8px;">
@@ -70,19 +69,19 @@
         </form>
     </div>
 
-    <!-- Cuadrante 2: Asignar personal separado por rol -->
+    <!-- Cuadrante 2: Lista y asignación -->
     <div class="formulario" style="flex: 1 1 45%; padding: 15px;">
         <h2>👥 Lista de Personal</h2>
         <input type="text" id="buscador" placeholder="Buscar por nombre, apellido o RUT" oninput="filtrarPersonal()">
 
         <form method="POST">
             <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                <!-- Mini tabla trabajadores -->
                 <div class="tabla-scroll" style="flex: 1 1 48%;">
                     <h5>👷 Trabajadores</h5>
                     <table>
                         <thead>
                             <tr>
+                                <th>#</th>
                                 <th>Seleccionar</th>
                                 <th>Nombre</th>
                                 <th>Apellido</th>
@@ -92,6 +91,7 @@
                         <tbody class="tabla-personal">
                             {% for persona in lista_personal if persona.rol == 'Trabajador' %}
                             <tr>
+                                <td>{{ loop.index }}</td>
                                 <td><input type="checkbox" name="seleccionados" value="{{ persona.rut }}|{{ persona.nombre }}|{{ persona.apellido }}|{{ persona.rol }}"></td>
                                 <td>{{ persona.nombre }}</td>
                                 <td>{{ persona.apellido }}</td>
@@ -102,12 +102,12 @@
                     </table>
                 </div>
 
-                <!-- Mini tabla jefes de terreno -->
                 <div class="tabla-scroll" style="flex: 1 1 48%;">
-                    <h5>🧑‍💼 Jefes </h5>
+                    <h5>🧑‍💼 Jefes</h5>
                     <table>
                         <thead>
                             <tr>
+                                <th>#</th>
                                 <th>Seleccionar</th>
                                 <th>Nombre</th>
                                 <th>Apellido</th>
@@ -116,8 +116,8 @@
                         </thead>
                         <tbody class="tabla-personal">
                             {% for persona in lista_personal if persona.rol in ['jefeT', 'jefeB'] %}
-
                             <tr>
+                                <td>{{ loop.index }}</td>
                                 <td><input type="checkbox" name="seleccionados" value="{{ persona.rut }}|{{ persona.nombre }}|{{ persona.apellido }}|{{ persona.rol }}"></td>
                                 <td>{{ persona.nombre }}</td>
                                 <td>{{ persona.apellido }}</td>
@@ -129,27 +129,27 @@
                 </div>
             </div>
 
-            <label style="margin-top: 15px; display: block;">🏢 Selecciona Centro de Costo:</label>
-            <select name="centro_costo" required>
-                <option value="">-- Selecciona --</option>
+            <label style="margin-top: 15px; display: block;">🏢 Selecciona Centro(s) de Costo:</label>
+            <select name="centros_costo" multiple required size="5" style="width: 100%; height: auto;">
                 {% for centro in centros_costo %}
                 <option value="{{ centro.id_proyecto }} - {{ centro.nombre_proyecto }}">
                     {{ centro.id_proyecto }} - {{ centro.nombre_proyecto }}
                 </option>
                 {% endfor %}
             </select>
+            <small>Usa Ctrl (Windows) o Cmd (Mac) para seleccionar varios</small>
 
             <button type="submit" name="confirmar_asignacion" style="margin-top: 15px;">📂 Guardar Cambios</button>
         </form>
     </div>
 
-    <!-- Cuadrante 4: Resumen de asignación -->
-    <div class="formulario" style="flex: 1 1 45%; padding: 15px; max-height: 400px; overflow-y: auto;">
+    <!-- Cuadrante 4: Resumen -->
+    <div class="formulario resumen-asignacion" style="flex: 1 1 45%; padding: 15px; max-height: 400px; overflow-y: auto;">
         <h3>📋 Resumen de Personal Asignado por Centro de Costo</h3>
         {% for item in resumen_asignacion %}
-        <details style="margin-bottom: 15px;">
+        <details style="margin-bottom: 12px;">
             <summary><strong>{{ item.centro_costo }}</strong> – {{ item.cantidad }} persona(s)</summary>
-            <ul style="margin-top: 10px;">
+            <ol style="margin-top: 10px; padding-left: 18px; font-size: 14px; line-height: 1.5;">
                 {% for persona in detalle_asignacion[item.centro_costo] %}
                 <li>
                     {{ persona.nombre }} {{ persona.apellido }} – {{ persona.rut }}
@@ -160,7 +160,7 @@
                     </form>
                 </li>
                 {% endfor %}
-            </ul>
+            </ol>
         </details>
         {% endfor %}
     </div>
@@ -216,6 +216,16 @@
 .btn-simple:hover {
     color: darkred;
 }
+.resumen-asignacion details summary {
+    cursor: pointer;
+    font-size: 15px;
+    margin-bottom: 6px;
+}
+.resumen-asignacion li {
+    margin-bottom: 4px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #ccc;
+}
 </style>
 
 <script>
@@ -228,7 +238,6 @@ function filtrarPersonal() {
     });
 }
 
-// Calcular pago por hora automáticamente
 document.addEventListener('DOMContentLoaded', function () {
     const haberesInput = document.getElementById('pago_haberes');
     const resultado = document.getElementById('pago_hora_resultado');

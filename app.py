@@ -727,16 +727,30 @@ def control_gastos():
 
     conexion = obtener_conexion()
     centros_costo = []
+    rol_usuario = session.get('rol')
+    rut_usuario = session.get('rut')
 
-    with conexion.cursor() as cursor:
-        # ✅ TODOS ven todos los centros de costo asignados
-        cursor.execute("""
-            SELECT DISTINCT centro_costo
-            FROM asignacion_personal
-        """)
-        centros_costo = [row[0] for row in cursor.fetchall()]
+    print("🧪 ROL:", rol_usuario)
+    print("🧪 RUT del usuario:", rut_usuario)
 
-    # Registro de gastos (cuando se envía el formulario)
+    with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+        if rol_usuario == 'admin':
+            cursor.execute("""
+                SELECT DISTINCT centro_costo
+                FROM asignacion_personal
+                ORDER BY centro_costo
+            """)
+        else:
+            cursor.execute("""
+                SELECT DISTINCT centro_costo
+                FROM asignacion_personal
+                WHERE REPLACE(REPLACE(rut, '.', ''), ' ', '') = REPLACE(REPLACE(%s, '.', ''), ' ', '')
+                ORDER BY centro_costo
+            """, (rut_usuario,))
+        centros_costo = [row['centro_costo'] for row in cursor.fetchall()]
+        print("🎯 Centros recuperados:", centros_costo)
+
+    # Registro de gastos
     if request.method == 'POST' and 'confirmar_adquisiciones' in request.form:
         centro_costo = request.form.get('centro_costo', '').strip()
         categoria = request.form.get('categoria', '').strip()
@@ -771,7 +785,6 @@ def control_gastos():
                 return redirect(url_for('control_gastos'))
 
             try:
-                # Insertar en registro_costos
                 cursor.execute("""
                     INSERT INTO registro_costos (
                         centro_costo, categoria, fecha, tipo_documento,
@@ -783,7 +796,7 @@ def control_gastos():
                     numero_documento, registro_compra, monto_registro, usuario_actual, tipo_pago
                 ))
 
-                # Insertar en facturaOC si es factura
+                # También insertar en facturaOC si corresponde
                 if tipo_documento.lower() == 'factura' and numero_documento:
                     cursor.execute("""
                         INSERT INTO facturaOC (
@@ -795,7 +808,6 @@ def control_gastos():
                         numero_documento, fecha, monto_registro, 'control_gastos'
                     ))
 
-                # Insertar en facturaOC si es orden de compra
                 elif tipo_documento.lower() == 'orden de compra' and numero_documento:
                     cursor.execute("""
                         INSERT INTO facturaOC (
@@ -817,7 +829,7 @@ def control_gastos():
 
         return redirect(url_for('control_gastos'))
 
-    # Mostrar registros guardados y categorías
+    # Mostrar registros y categorías
     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
         cursor.execute("""
             SELECT centro_costo, categoria, fecha, tipo_documento, numero_documento, 
@@ -834,6 +846,8 @@ def control_gastos():
         """)
         categorias = cursor.fetchall()
 
+    print("📋 Centros enviados al HTML:", centros_costo)
+
     return render_template(
         'control_gastos.html',
         historial_adquisiciones=gastos_guardados,
@@ -842,6 +856,7 @@ def control_gastos():
         mostrar_descarga=True,
         url_descarga="/descargar_excel/gastos"
     )
+
 
 #####################################################################################################
 # RUTA PARA ASIGNAR PERSONAL
@@ -853,6 +868,9 @@ def asignar_personal():
 
     conexion = obtener_conexion()
 
+    def limpiar_rut(rut):
+        return rut.replace('.', '').replace(' ', '').replace('\n', '').replace('\r', '').strip()
+
     if request.method == 'POST':
         usuario = session.get('usuario')
 
@@ -860,7 +878,7 @@ def asignar_personal():
         if 'agregar_personal' in request.form:
             nuevo_nombre = request.form.get('nuevo_nombre', '').strip()
             nuevo_apellido = request.form.get('nuevo_apellido', '').strip()
-            nuevo_rut = request.form.get('nuevo_rut', '').strip()
+            nuevo_rut = limpiar_rut(request.form.get('nuevo_rut', ''))
             nuevo_especialidad = request.form.get('nuevo_especialidad', '').strip()
             nuevo_rol = request.form.get('nuevo_rol', '').strip()
             nuevo_genero = request.form.get('nuevo_genero', '').strip()
@@ -893,32 +911,32 @@ def asignar_personal():
                     flash(f"✅ {nuevo_nombre} {nuevo_apellido} agregado a la base de datos con pago por hora ${pago_hora}.", "success")
             return redirect(url_for('asignar_personal'))
 
-        # 📌 Asignar personal
+        # 📌 Asignar personal a múltiples centros
         elif 'confirmar_asignacion' in request.form:
-            centro_costo = request.form.get('centro_costo')
-            seleccionados = request.form.getlist('seleccionados')
+            centros_seleccionados = request.form.getlist('centros_costo')
+            personas_seleccionadas = request.form.getlist('seleccionados')
 
-            if not centro_costo or not seleccionados:
+            if not centros_seleccionados or not personas_seleccionadas:
                 flash("⚠️ Debes seleccionar al menos una persona y un centro de costo.", "warning")
                 return redirect(url_for('asignar_personal'))
 
             with conexion.cursor() as cursor:
-                for dato in seleccionados:
-                    rut, nombre, apellido, rol = dato.split('|')
-
-                    cursor.execute("""
-                        SELECT 1 FROM asignacion_personal
-                        WHERE rut = %s AND centro_costo = %s
-                    """, (rut, centro_costo))
-                    existe = cursor.fetchone()
-
-                    if not existe:
+                for dato in personas_seleccionadas:
+                    rut, nombre, apellido, rol = [d.strip() for d in dato.split('|')]
+                    rut = limpiar_rut(rut)
+                    for centro in centros_seleccionados:
                         cursor.execute("""
-                            INSERT INTO asignacion_personal (nombre, apellido, rut, rol, centro_costo, asignado_por)
-                            VALUES (%s, %s, %s, %s, %s, %s)
-                        """, (nombre, apellido, rut, rol, centro_costo, usuario))
+                            SELECT 1 FROM asignacion_personal
+                            WHERE rut = %s AND centro_costo = %s
+                        """, (rut, centro))
+                        existe = cursor.fetchone()
+                        if not existe:
+                            cursor.execute("""
+                                INSERT INTO asignacion_personal (nombre, apellido, rut, rol, centro_costo, asignado_por)
+                                VALUES (%s, %s, %s, %s, %s, %s)
+                            """, (nombre, apellido, rut, rol, centro, usuario))
             conexion.commit()
-            flash("✅ Personal asignado correctamente.", "success")
+            flash("✅ Personal asignado correctamente a los centros seleccionados.", "success")
             return redirect(url_for('asignar_personal'))
 
         # 🗑️ Eliminar asignación
@@ -956,7 +974,6 @@ def asignar_personal():
         cursor.execute("SELECT nombre, apellido, rut, rol FROM personal ORDER BY nombre ASC")
         lista_personal = cursor.fetchall()
 
-        # ✅ Filtrar centros de costo según el rol
         rol_usuario = session.get('rol')
         rut_usuario = session.get('rut')
 
@@ -974,6 +991,7 @@ def asignar_personal():
         else:
             cursor.execute("SELECT id_proyecto, nombre_proyecto FROM centros_costo ORDER BY id_proyecto")
         centros_costo = cursor.fetchall()
+
         cursor.execute("""
             SELECT centro_costo, COUNT(*) as cantidad
             FROM asignacion_personal
@@ -998,7 +1016,6 @@ def asignar_personal():
                            resumen_asignacion=resumen_asignacion,
                            detalle_asignacion=detalle_asignacion)
 
-
 ##################################################################################################################
 from datetime import datetime, timedelta
 
@@ -1021,17 +1038,21 @@ def registro_horas():
     resumen = {}
 
     centros_costo = []
+    usuario = session.get('usuario')
+    rut_usuario = session.get('rut')
+    rol_usuario = session.get('rol')
 
-    # ✅ Mostrar todos los centros de costo disponibles sin restricción
     with conexion.cursor() as cursor:
-        cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal ORDER BY centro_costo")
+        if rol_usuario == 'admin':
+            cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal ORDER BY centro_costo")
+        else:
+            cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal WHERE rut = %s ORDER BY centro_costo", (rut_usuario,))
         centros_costo = [row[0] for row in cursor.fetchall()]
 
     if request.method == 'POST':
         if 'guardar_semana' in request.form:
-            semana = request.form.get('semana')
-            centro_costo = request.form.get('centro_costo')
-            usuario = session.get('usuario')
+            semana = request.form.get('semana', '').strip()
+            centro_costo = request.form.get('centro_costo', '').strip()
 
             if semana:
                 year, week = semana.split('-W')
@@ -1043,20 +1064,14 @@ def registro_horas():
             domingo = primer_dia + timedelta(days=6)
 
             with conexion.cursor() as cursor:
-                cursor.execute("""
-                    SELECT DISTINCT horas_fecha FROM registro_horas
-                    WHERE centro_costo = %s AND horas_fecha BETWEEN %s AND %s
-                """, (centro_costo, primer_dia.date(), domingo))
+                cursor.execute("""SELECT DISTINCT horas_fecha FROM registro_horas WHERE centro_costo = %s AND horas_fecha BETWEEN %s AND %s""", (centro_costo, primer_dia.date(), domingo))
                 fechas_guardadas = cursor.fetchall()
                 for fila in fechas_guardadas:
                     fecha_str = fila[0].strftime('%Y-%m-%d')
                     dias_bloqueados[fecha_str] = True
 
             with conexion.cursor() as cursor:
-                cursor.execute("""
-                    SELECT rut, nombre, apellido FROM asignacion_personal
-                    WHERE centro_costo = %s
-                """, (centro_costo,))
+                cursor.execute("SELECT rut, nombre, apellido FROM asignacion_personal WHERE centro_costo = %s", (centro_costo,))
                 personas = cursor.fetchall()
 
             dia_a_guardar = request.form.get('dia_a_guardar', '').strip().lower()
@@ -1072,9 +1087,9 @@ def registro_horas():
 
             with conexion.cursor() as cursor:
                 for persona in personas:
-                    rut = persona[0]
-                    nombre = persona[1]
-                    apellido = persona[2]
+                    rut = persona[0].strip()
+                    nombre = persona[1].strip()
+                    apellido = persona[2].strip()
 
                     hn_key = f'hn_{rut}_{dia_a_guardar}'
                     he_key = f'he_{rut}_{dia_a_guardar}'
@@ -1091,10 +1106,9 @@ def registro_horas():
                         if hn_val in ['L', 'V', 'F', 'P']:
                             horas_normales = 0
                             observacion = hn_val
-
                             if hn_val == 'P':
-                                tipo_permiso = request.form.get(f'tipo_permiso_{rut}_{dia_a_guardar}', '')
-                                razon_permiso = request.form.get(f'razon_permiso_{rut}_{dia_a_guardar}', '')
+                                tipo_permiso = request.form.get(f'tipo_permiso_{rut}_{dia_a_guardar}', '').strip()
+                                razon_permiso = request.form.get(f'razon_permiso_{rut}_{dia_a_guardar}', '').strip()
                                 if tipo_permiso and razon_permiso:
                                     observacionP = f"{tipo_permiso} - {razon_permiso}"
                                 else:
@@ -1107,22 +1121,29 @@ def registro_horas():
                                 flash(f"⚠️ Horas normales inválidas (máx. 1 decimal) para {rut}", "warning")
                                 continue
 
+                        # 🚨 VALIDAR si supera las 9 horas en otros centros
+                        cursor.execute("""
+                            SELECT centro_costo, horas_normales
+                            FROM registro_horas
+                            WHERE rut = %s AND horas_fecha = %s
+                        """, (rut, fecha_real))
+                        registros_previos = cursor.fetchall()
+                        total_previas = sum([r[1] for r in registros_previos if r[1]])
+                        if total_previas + horas_normales > 9:
+                            centros_previos = [r[0] for r in registros_previos]
+                            flash(f"⚠️ El trabajador {nombre} {apellido} ya tiene {total_previas}h registradas en {', '.join(centros_previos)}. No se puede superar el total de 9h por día.", "warning")
+                            continue
+
                         horas_extras = int(he_val) if he_val != '' else 0
                         if horas_extras < 0 or horas_extras > 24:
                             flash(f"⚠️ Horas extras inválidas para {rut}", "warning")
                             continue
 
-                        cursor.execute("""
-                            SELECT 1 FROM registro_horas
-                            WHERE horas_fecha = %s AND centro_costo = %s AND rut = %s
-                        """, (fecha_real, centro_costo, rut))
+                        cursor.execute("""SELECT 1 FROM registro_horas WHERE horas_fecha = %s AND centro_costo = %s AND rut = %s""", (fecha_real, centro_costo, rut))
                         if cursor.fetchone():
                             continue
 
-                        if observacion == 'V':
-                            dias_trabajados = 1
-                        else:
-                            dias_trabajados = round(horas_normales / 9, 1) if horas_normales else 0
+                        dias_trabajados = 1 if observacion == 'V' else round(horas_normales / 9, 1) if horas_normales else 0
 
                         cursor.execute("""
                             INSERT INTO registro_horas (
@@ -1131,9 +1152,7 @@ def registro_horas():
                                 fecha_registro, usuario, observacion, dias_trabajados, observacionP
                             )
                             VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, %s, %s, %s, %s)
-                        """, (rut, nombre, apellido, centro_costo,
-                              horas_normales, horas_extras, fecha_real,
-                              usuario, observacion, dias_trabajados, observacionP))
+                        """, (rut, nombre, apellido, centro_costo, horas_normales, horas_extras, fecha_real, usuario, observacion, dias_trabajados, observacionP))
 
                     except ValueError:
                         flash(f"⚠️ Error en formato de horas para {rut}", "warning")
@@ -1168,10 +1187,7 @@ def registro_horas():
                             dias_bloqueados[fecha_str] = True
 
                     with conexion.cursor() as cursor:
-                        cursor.execute("""
-                            SELECT nombre, apellido, rut FROM asignacion_personal
-                            WHERE centro_costo = %s
-                        """, (centro_costo_actual,))
+                        cursor.execute("SELECT nombre, apellido, rut FROM asignacion_personal WHERE centro_costo = %s", (centro_costo_actual,))
                         trabajadores = cursor.fetchall()
 
                 except Exception as e:
@@ -1183,9 +1199,8 @@ def registro_horas():
     if centro_costo_actual:
         with conexion.cursor() as cursor:
             cursor.execute("""
-                SELECT 
-                    MAX(horas_fecha) AS ultima_fecha,
-                    SUM(COALESCE(horas_normales, 0) + COALESCE(horas_extras, 0)) AS total_horas
+                SELECT MAX(horas_fecha) AS ultima_fecha,
+                       SUM(COALESCE(horas_normales, 0) + COALESCE(horas_extras, 0)) AS total_horas
                 FROM registro_horas
                 WHERE centro_costo = %s AND horas_fecha <= CURRENT_DATE
             """, (centro_costo_actual,))
@@ -1203,6 +1218,8 @@ def registro_horas():
                            fechas_por_dia=fechas_por_dia,
                            dias_bloqueados=dias_bloqueados,
                            resumen=resumen)
+
+
 
 ########################################################################################################
 @app.route('/adquisiciones', methods=['GET', 'POST'])
@@ -1392,6 +1409,76 @@ def descargar_excel(tabla):
     return send_file(output, download_name=nombre, as_attachment=True)
 
 #####################################################################################################################################
+
+@app.route('/estadisticas', methods=['GET', 'POST'])
+def estadisticas():
+    if 'usuario' not in session:
+        flash("Debes iniciar sesión", "danger")
+        return redirect(url_for('login'))
+
+    conexion = obtener_conexion()
+    centros_costo = []
+    datos = []
+    centro_costo_seleccionado = None
+
+    with conexion.cursor() as cursor:
+        cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal ORDER BY centro_costo")
+        centros_costo = [fila[0] for fila in cursor.fetchall()]
+
+    if request.method == 'POST':
+        centro_costo_seleccionado = request.form.get('centro_costo')
+
+        with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+            cursor.execute("""
+                SELECT p.nombre, p.apellido, p.rut,
+                    SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END) AS total_hn,
+                    SUM(CASE WHEN rh.horas_extras > 0 THEN rh.horas_extras ELSE 0 END) AS total_he,
+                    COUNT(DISTINCT rh.horas_fecha) FILTER (WHERE rh.horas_normales > 0 OR rh.horas_extras > 0) AS dias_trabajados,
+                    COUNT(*) FILTER (WHERE rh.observacion ILIKE 'L') AS licencias,
+                    COUNT(*) FILTER (WHERE rh.observacion ILIKE 'P') AS permisos,
+                    COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas,
+                    COUNT(*) FILTER (WHERE rh.observacion ILIKE 'V') AS vacaciones
+                FROM asignacion_personal ap
+                LEFT JOIN registro_horas rh ON ap.rut = rh.rut AND ap.centro_costo = rh.centro_costo
+                LEFT JOIN personal p ON ap.rut = p.rut
+                WHERE ap.centro_costo = %s
+                GROUP BY p.nombre, p.apellido, p.rut
+                ORDER BY p.apellido, p.nombre
+            """, (centro_costo_seleccionado,))
+            datos = cursor.fetchall()
+
+    return render_template('estadisticas.html', centros_costo=centros_costo,
+                           centro_seleccionado=centro_costo_seleccionado, datos=datos)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+######################################################################################################333
+
 @app.route('/logout')
 def logout():
     session.pop('usuario', None)
