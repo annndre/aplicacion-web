@@ -26,6 +26,8 @@
             {% for item in solicitud.productos %}
                 <li>
                     <strong>{{ item.producto_nombre }}</strong><br>
+                    Marca: {{ item.marca if item.marca else 'No registrada' }}<br>
+                    N° Serie: {{ item.n_serie if item.n_serie else 'No registrado' }}<br>
                     Cantidad: {{ item.cantidad }}<br>
                     Precio Unitario: ${{ item.precio_unitario }}<br>
                     💰 Total: ${{ item.precio }}<br>

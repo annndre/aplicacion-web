@@ -118,8 +118,6 @@ def solicitudes():
         """)
         alertas_stock = cursor.fetchall()
 
-
-
     if request.method == 'POST':
         nombre_solicitante = request.form['nombre_solicitante']
         rut_solicitante = request.form['rut_solicitante']
@@ -128,22 +126,32 @@ def solicitudes():
         id_proyecto = request.form['id_proyecto']
         motivo = request.form['motivo']
 
-
         # Validación del formato del RUT
         if not re.match(r'^\d{7,8}-[\dkK]$', rut_solicitante):
             flash('RUT inválido. Debe tener el formato 12345678-9 o 1234567-K')
             return redirect(url_for('solicitudes'))
 
         with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-            cursor.execute("SELECT producto_nombre, estado, precio_unitario FROM productos WHERE id = %(id)s", {'id': producto_id})
+            cursor.execute("""
+                SELECT producto_nombre, estado, precio_unitario, marca, n_serie
+                FROM productos
+                WHERE id = %(id)s
+            """, {'id': producto_id})
             producto = cursor.fetchone()
-            producto_nombre = producto['producto_nombre'] if producto else "Desconocido"
-            estado_producto = producto['estado'] if producto else "Desconocido"
-            precio_unitario = producto['precio_unitario'] if producto else "Desconocido"
-                # ⛔ Validación para bloquear productos no operativos
+
+            if not producto:
+                flash('Producto no encontrado.', 'error')
+                return redirect(url_for('solicitudes'))
+
+            producto_nombre = producto['producto_nombre']
+            estado_producto = producto['estado']
+            precio_unitario = producto['precio_unitario']
+            marca = producto['marca']
+            n_serie = producto['n_serie']
+
             if estado_producto.lower().strip() != 'operativo':
-               flash(f'❌ El producto "{producto_nombre}" no se puede agregar porque no está operativo.')
-               return redirect(url_for('solicitudes'))
+                flash(f'❌ El producto "{producto_nombre}" no se puede agregar porque no está operativo.')
+                return redirect(url_for('solicitudes'))
 
         if 'solicitud_temporal' not in session:
             session['solicitud_temporal'] = {
@@ -154,7 +162,7 @@ def solicitudes():
 
         # Buscar el nombre del proyecto en la lista de proyectos
         nombre_proyecto = next((p['nombre_proyecto'] for p in proyectos if str(p['id_proyecto']) == id_proyecto), "Desconocido")
-   
+
         total_precio = round(precio_unitario * cantidad)
         session['solicitud_temporal']['productos'].append({
             'producto_id': producto_id,
@@ -163,7 +171,9 @@ def solicitudes():
             'centro_costo': f"{id_proyecto} - {nombre_proyecto}",
             'motivo': motivo,
             'precio_unitario': precio_unitario,
-            'precio': total_precio
+            'precio': total_precio,
+            'marca': marca,
+            'n_serie': n_serie
         })
 
         flash(f'Producto {producto_nombre} agregado.')
@@ -218,7 +228,10 @@ def confirmar_solicitud():
             conexion = obtener_conexion()
             with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
                 for item in datos['productos']:
-                    cursor.execute("SELECT stock_disponible, stock_critico FROM productos WHERE id = %(id)s", {'id': item['producto_id']})
+                    cursor.execute(
+                        "SELECT stock_disponible, stock_critico FROM productos WHERE id = %(id)s",
+                        {'id': item['producto_id']}
+                    )
                     producto = cursor.fetchone()
 
                     if not producto or producto['stock_disponible'] < item['cantidad']:
@@ -237,27 +250,30 @@ def confirmar_solicitud():
                     # Registrar en historial de solicitudes
                     cursor.execute("""
                         INSERT INTO historial_solicitudes 
-                        (nombre_solicitante, rut_solicitante, producto_id, producto_nombre, cantidad, centro_costo, motivo, usuario, precio)
-                        VALUES (%(nombre_solicitante)s, %(rut_solicitante)s, %(producto_id)s, %(producto_nombre)s, %(cantidad)s, %(centro_costo)s, %(motivo)s, %(usuario)s, %(precio)s)
+                        (nombre_solicitante, rut_solicitante, producto_id, producto_nombre, marca, n_serie, cantidad, centro_costo, motivo, usuario, precio)
+                        VALUES (%(nombre_solicitante)s, %(rut_solicitante)s, %(producto_id)s, %(producto_nombre)s, %(marca)s, %(n_serie)s, %(cantidad)s, %(centro_costo)s, %(motivo)s, %(usuario)s, %(precio)s)
                     """, {
                         'nombre_solicitante': datos['nombre_solicitante'],
                         'rut_solicitante': datos['rut_solicitante'],
                         'producto_id': item['producto_id'],
                         'producto_nombre': item['producto_nombre'],
+                        'marca': item.get('marca'),
+                        'n_serie': item.get('n_serie'),
                         'cantidad': item['cantidad'],
                         'centro_costo': item['centro_costo'],
                         'motivo': item['motivo'],
                         'usuario': usuario,
                         'precio': item['precio'],
-
                     })
+
                     print("DEBUG MOTIVO:", item.get('motivo'))
 
                     if item['motivo'] == 'devolucion':
+                        print("Insertando en devoluciones_pendientes:", item)
                         cursor.execute("""
                             INSERT INTO devoluciones_pendientes 
-                            (nombre_solicitante, rut_solicitante, producto_id, producto_nombre, cantidad, centro_costo, motivo, usuario)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            (nombre_solicitante, rut_solicitante, producto_id, producto_nombre, cantidad, centro_costo, motivo, usuario, marca, n_serie)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """, (
                             datos['nombre_solicitante'],
                             datos['rut_solicitante'],
@@ -266,10 +282,11 @@ def confirmar_solicitud():
                             item['cantidad'],
                             item['centro_costo'],
                             item['motivo'],
-                            usuario
+                            usuario,
+                            item.get('marca'),
+                            item.get('n_serie')
                         ))
                         print("✅ INSERT ejecutado en devoluciones_pendientes")
-
 
                     # Stock crítico
                     if nuevo_stock <= producto['stock_critico']:
@@ -308,7 +325,8 @@ def confirmar_solicitud():
     # Render en GET
     return render_template(
         'confirmar_solicitud.html',
-        solicitud=datos
+        solicitud=datos,
+        alertas_stock_critico=alertas_stock_critico if 'alertas_stock_critico' in locals() else []
     )
 
 ####################################################################################################################
@@ -329,12 +347,17 @@ def devoluciones():
             rut = request.form['rut_devolutor'].strip()
 
             cursor.execute("""
-                SELECT * FROM devoluciones_pendientes
+                SELECT id, nombre_solicitante, rut_solicitante, producto_id, producto_nombre, cantidad, fecha, centro_costo, marca, n_serie
+                FROM devoluciones_pendientes
                 WHERE rut_solicitante = %s
                 ORDER BY fecha DESC
             """, (rut,))
         else:
-            cursor.execute("SELECT * FROM devoluciones_pendientes ORDER BY fecha DESC")
+            cursor.execute("""
+                SELECT id, nombre_solicitante, rut_solicitante, producto_id, producto_nombre, cantidad, fecha, centro_costo, marca, n_serie
+                FROM devoluciones_pendientes
+                ORDER BY fecha DESC
+            """)
 
         devoluciones_filtradas = cursor.fetchall()
 
@@ -369,11 +392,11 @@ def confirmar_devolucion():
             devolucion = cursor.fetchone()
 
             if devolucion:
-                # Insertar en historial_devoluciones con centro_costo
+                # Insertar en historial_devoluciones con centro_costo, marca y n_serie
                 cursor.execute("""
                     INSERT INTO historial_devoluciones 
-                    (nombre_devolutor, rut_devolutor, producto_id, producto_nombre, cantidad, fecha_devolucion, usuario, centro_costo)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    (nombre_devolutor, rut_devolutor, producto_id, producto_nombre, cantidad, fecha_devolucion, usuario, centro_costo, marca, n_serie)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     devolucion['nombre_solicitante'],
                     devolucion['rut_solicitante'],
@@ -382,7 +405,9 @@ def confirmar_devolucion():
                     devolucion['cantidad'],
                     devolucion['fecha'],
                     usuario_actual,
-                    devolucion['centro_costo']
+                    devolucion['centro_costo'],
+                    devolucion.get('marca'),
+                    devolucion.get('n_serie')
                 ))
 
                 # Actualizar stock_disponible en productos
@@ -403,11 +428,10 @@ def confirmar_devolucion():
     flash("✅ Devoluciones confirmadas y eliminadas de la base.")
     return redirect(url_for('devoluciones'))
 
-
 ####################################################################################################################
 @app.route('/entradas', methods=['GET', 'POST'])
 def entradas():
-    if 'usuario' not in session or session.get('rol') not in ['admin', 'bodega','jefeB']:
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'bodega', 'jefeB']:
         flash("No tienes acceso a esta página", "danger")
         return redirect(url_for('login'))
 
@@ -435,6 +459,9 @@ def entradas():
             producto_nombre = request.form.get('producto_nombre', '').strip()
             unidad = request.form.get('unidad', '').strip()
             categoria = request.form.get('categoria', '').strip()
+            marca = request.form.get('marca', '').strip()
+            n_serie = request.form.get('n_serie', '').strip()
+
             try:
                 cantidad = int(request.form.get('cantidad', 0))
                 precio_unitario = float(request.form.get('precio_unitario', 0))
@@ -451,12 +478,11 @@ def entradas():
                 if producto_id_form:
                     producto_id = int(producto_id_form)
                 else:
-                    # 🔽 Producto nuevo: lo insertamos
                     cursor.execute("""
-                        INSERT INTO productos (producto_nombre, stock_disponible, unidad, categoria, precio_unitario)
-                        VALUES (%s, %s, %s, %s, %s)
+                        INSERT INTO productos (producto_nombre, stock_disponible, unidad, categoria, precio_unitario, marca, n_serie)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
                         RETURNING id
-                    """, (producto_nombre, cantidad, unidad, categoria, precio_unitario))
+                    """, (producto_nombre, cantidad, unidad, categoria, precio_unitario, marca, n_serie))
                     producto_id = cursor.fetchone()[0]
                     conexion.commit()
                     flash(f"🆕 Producto nuevo agregado: {producto_nombre}", "info")
@@ -468,13 +494,13 @@ def entradas():
                 'unidad': unidad,
                 'categoria': categoria,
                 'precio_unitario': precio_unitario,
-                'es_nuevo': not producto_id_form  # Agrega esta línea
-
+                'marca': marca,
+                'n_serie': n_serie,
+                'es_nuevo': not producto_id_form
             })
 
             session.modified = True
             flash(f'✅ Producto agregado: {producto_nombre} - Cantidad: {cantidad} - Precio Unitario: ${precio_unitario:.2f}', 'success')
-
             return redirect(url_for('entradas'))
 
         elif 'eliminar_producto' in request.form:
@@ -494,7 +520,7 @@ def entradas():
 
                 if not any([numero_orden, numero_guia, numero_factura]):
                     flash("⚠️ Debes ingresar al menos número de orden, guía o factura.", "error")
-                    return redirect(url_for('entradas')) 
+                    return redirect(url_for('entradas'))
 
                 if not session['entrada_temporal'].get('productos'):
                     flash('⚠️ Error: No hay productos para registrar.', 'error')
@@ -509,17 +535,16 @@ def entradas():
                         unidad = producto['unidad']
                         categoria = producto['categoria']
                         precio_unitario = producto['precio_unitario']
-
+                        marca = producto.get('marca', '')
+                        n_serie = producto.get('n_serie', '')
 
                         if not producto.get('es_nuevo'):
-                        # Solo si el producto no es nuevo, sumamos stock
                             cursor.execute("""
                                 UPDATE productos 
                                 SET stock_disponible = stock_disponible + %s, precio_unitario = %s
                                 WHERE id = %s
                             """, (cantidad, precio_unitario, producto_id))
                         else:
-    # Si es nuevo, solo actualizamos el precio si hace falta
                             cursor.execute("""
                                 UPDATE productos 
                                 SET precio_unitario = %s
@@ -528,9 +553,9 @@ def entradas():
 
                         cursor.execute("""
                             INSERT INTO historial_entradas 
-                            (numero_orden, numero_guia, numero_factura, producto_id, producto_nombre, cantidad, unidad, categoria, precio_unitario, usuario) 
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """, (numero_orden, numero_guia, numero_factura, producto_id, producto_nombre, cantidad, unidad, categoria, precio_unitario, usuario))
+                            (numero_orden, numero_guia, numero_factura, producto_id, producto_nombre, cantidad, unidad, categoria, precio_unitario, marca, n_serie, usuario) 
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (numero_orden, numero_guia, numero_factura, producto_id, producto_nombre, cantidad, unidad, categoria, precio_unitario, marca, n_serie, usuario))
 
                 conexion.commit()
                 flash('✅ Entrada confirmada y registrada exitosamente.', 'success')
@@ -550,6 +575,7 @@ def entradas():
         mostrar_descarga=True,
         url_descarga="/descargar_excel/entradas"
     )
+
 
 ####################################################################################################################
 @app.route('/inventario', methods=['GET', 'POST'])
@@ -572,8 +598,14 @@ def ver_inventario():
     categorias = []
 
     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-        cursor.execute("SELECT * FROM productos")
+        cursor.execute("""
+            SELECT id, producto_nombre, n_serie, marca, stock_disponible, unidad, stock_critico, categoria, estado, precio_unitario
+            FROM productos
+            ORDER BY id ASC
+        """)
+
         inventario = cursor.fetchall()
+
 
         cursor.execute("SELECT DISTINCT categoria FROM productos ORDER BY categoria")
         categorias = [row[0] for row in cursor.fetchall()]

@@ -27,6 +27,8 @@
                         <tr>
                             <th>✔</th>
                             <th>Producto</th>
+                            <th>Marca</th>
+                            <th>N° Serie</th>
                             <th>Cantidad</th>
                             <th>Centro de Costo</th>
                             <th>RUT</th>
@@ -38,6 +40,8 @@
                         <tr>
                             <td><input type="checkbox" name="devoluciones_ids" value="{{ d.id }}"></td>
                             <td>{{ d.producto_nombre }}</td>
+                            <td>{{ d.marca if d.marca else 'No registrada' }}</td>
+                            <td>{{ d.n_serie if d.n_serie else 'No registrado' }}</td>
                             <td>{{ d.cantidad }}</td>
                             <td>{{ d.centro_costo }}</td>
                             <td class="rut-col">{{ d.rut_solicitante }}</td>
@@ -100,7 +104,7 @@ document.getElementById("filtro_rut").addEventListener("input", function() {
 table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 13px; /* 👈 Tamaño de letra más pequeño */
+    font-size: 13px;
 }
 th, td {
     padding: 8px;
@@ -113,7 +117,7 @@ th {
 input[type="checkbox"] {
     width: 20px;
     height: 20px;
-    accent-color: #4CAF50; /* ✔ verde */
+    accent-color: #4CAF50;
     cursor: pointer;
 }
 input[type="checkbox"]:checked::before {

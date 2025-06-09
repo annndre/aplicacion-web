@@ -56,7 +56,7 @@
         <tbody id="tablaInventario">
             {% for producto in inventario %}
             <tr>
-                <td>{{ producto.id }}</td>
+                <td>{{ producto.n_serie }}</td>
                 <td>{{ producto.producto_nombre }}</td>
                 <td>{{ producto.stock_disponible }}</td>
                 <td>{{ producto.stock_critico }}</td>
