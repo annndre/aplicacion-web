@@ -7,7 +7,7 @@
 
 <!-- MENSAJE DE EDICIÓN PERMITIDA -->
 <div class="alert alert-info mt-3" role="alert">
-  Solo se pueden editar los días de la semana en curso antes del viernes.
+  Se pueden editar los días de la semana actual y las 2 anteriores. Solo un día a la vez.
 </div>
 
 <!-- BLOQUE DE MENSAJES FLASH -->
@@ -37,6 +37,12 @@
     }
     tbody tr:hover {
         background-color: #e0e0e0;
+    }
+
+    .bloqueado {
+        background-color: #eee !important;
+        opacity: 0.6;
+        pointer-events: none;
     }
 </style>
 
@@ -115,16 +121,18 @@
                                 pattern="^([0-9]{1,2}([.,][0-9])?|[lLvVfFpP])?$"
                                 title="Ej: 8, 7.5, 7,5 o L/V/F/P"
                                 placeholder="HN o L/V/F/P"
-                                class="form-control mb-1 hn_{{ dia_key }}"
+                                class="form-control mb-1 hn_{{ dia_key }} {% if datos %}bloqueado{% endif %}"
                                 value="{{ datos.hn if datos else '' }}"
-                                oninput="mostrarCamposPermiso(this.value, '{{ rut }}', '{{ dia_key }}')">
+                                oninput="mostrarCamposPermiso(this.value, '{{ rut }}', '{{ dia_key }}')"
+                                {% if datos %}readonly{% endif %}>
 
                             <input type="number"
                                 name="he_{{ rut }}_{{ dia_key }}"
                                 min="0" max="24"
                                 placeholder="HE"
-                                class="form-control he_{{ dia_key }}"
-                                value="{{ datos.he if datos else '' }}">
+                                class="form-control he_{{ dia_key }} {% if datos %}bloqueado{% endif %}"
+                                value="{{ datos.he if datos else '' }}"
+                                {% if datos %}disabled{% endif %}>
 
                             <div id="permiso_{{ rut }}_{{ dia_key }}" style="display: none; margin-top: 5px;">
                                 <select name="tipo_permiso_{{ rut }}_{{ dia_key }}" class="form-select mb-1" style="font-size: 0.85em;">
@@ -148,9 +156,12 @@
                 <tr>
                     <td></td>
                     {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie'] %}
-                    <td>
+                    <td style="text-align: center;">
                         <button type="submit" class="btn btn-primary btn-sm w-100 mt-2" onclick="return setDiaYEnviar('{{ dia_key }}')">
                             Guardar {{ dia_key|capitalize }}
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="habilitarDia('{{ dia_key }}')">
+                            ✏️ Editar {{ dia_key|capitalize }}
                         </button>
                     </td>
                     {% endfor %}
@@ -178,7 +189,7 @@
 <script>
 function rellenarDia(dia, valor) {
     document.querySelectorAll('.hn_' + dia).forEach(input => {
-        if (!input.disabled) input.value = valor;
+        if (!input.disabled && !input.readOnly) input.value = valor;
     });
 }
 
@@ -194,6 +205,30 @@ function mostrarCamposPermiso(valor, rut, dia) {
     } else {
         contenedor.style.display = 'none';
     }
+}
+
+function habilitarDia(dia) {
+    // Bloquea todos los días primero
+    ['lun', 'mar', 'mie', 'jue', 'vie'].forEach(d => {
+        document.querySelectorAll('.hn_' + d).forEach(i => {
+            i.setAttribute('readonly', true);
+            i.classList.add('bloqueado');
+        });
+        document.querySelectorAll('.he_' + d).forEach(i => {
+            i.setAttribute('disabled', true);
+            i.classList.add('bloqueado');
+        });
+    });
+
+    // Habilita solo el día seleccionado
+    document.querySelectorAll('.hn_' + dia).forEach(input => {
+        input.removeAttribute('readonly');
+        input.classList.remove('bloqueado');
+    });
+    document.querySelectorAll('.he_' + dia).forEach(input => {
+        input.removeAttribute('disabled');
+        input.classList.remove('bloqueado');
+    });
 }
 </script>
 {% endblock %}

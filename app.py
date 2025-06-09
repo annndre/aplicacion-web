@@ -1047,6 +1047,21 @@ def asignar_personal():
                            centros_costo=centros_costo,
                            resumen_asignacion=resumen_asignacion,
                            detalle_asignacion=detalle_asignacion)
+@app.route('/eliminar_personal/<rut>', methods=['POST'])
+def eliminar_personal(rut):
+    if 'usuario' not in session or session.get('rol') not in ['admin']:
+        flash("No tienes acceso a esta función", "danger")
+        return redirect(url_for('login'))
+
+    conexion = obtener_conexion()
+    try:
+        with conexion.cursor() as cursor:
+            cursor.execute("DELETE FROM personal WHERE rut = %s", (rut,))
+        conexion.commit()
+        flash("✅ Personal eliminado correctamente.", "success")
+    except Exception as e:
+        flash(f"❌ Error al eliminar: {str(e)}", "danger")
+    return redirect(url_for('asignar_personal'))
 
 ##################################################################################################################
 from datetime import datetime, timedelta, date
@@ -1104,9 +1119,15 @@ def registro_horas():
             fecha_real_dt = datetime.strptime(fecha_real, '%Y-%m-%d').date()
             semana_actual_dt = hoy.isocalendar().week
             semana_objetivo = fecha_real_dt.isocalendar().week
+            año_actual = hoy.isocalendar().year
+            año_objetivo = fecha_real_dt.isocalendar().year
 
-            if semana_actual_dt != semana_objetivo or fecha_real_dt > hoy:
-                flash("⚠️ Solo se puede editar la semana en curso antes del viernes.", "warning")
+            if año_actual != año_objetivo:
+                flash("⚠️ Solo se pueden editar semanas dentro del año actual.", "warning")
+                return redirect(url_for('registro_horas'))
+            
+            if semana_objetivo < semana_actual_dt - 2 or fecha_real_dt > hoy:
+                flash("⚠️ Solo se pueden editar la semana actual y las 2 anteriores.", "warning")
                 return redirect(url_for('registro_horas'))
 
             mensaje_mostrado = False

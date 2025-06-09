@@ -32,9 +32,7 @@
                    pattern="^\d{7,8}-[\dkK]$"
                    placeholder="Ej: 12345678-9"
                    required
-                   class="form-control form-control-sm"
-                   oninvalid="this.setCustomValidity('Formato inválido. Usa 7 u 8 dígitos, guion y dígito verificador (Ej: 12345678-9)')"
-                   oninput="this.setCustomValidity('')"><br>
+                   class="form-control form-control-sm"><br>
 
             <label for="nuevo_especialidad">Especialidad:</label>
             <select name="nuevo_especialidad" required style="margin-bottom: 8px;">
@@ -76,6 +74,7 @@
 
         <form method="POST">
             <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                <!-- Trabajadores -->
                 <div class="tabla-scroll" style="flex: 1 1 48%;">
                     <h5>👷 Trabajadores</h5>
                     <table>
@@ -86,6 +85,7 @@
                                 <th>Nombre</th>
                                 <th>Apellido</th>
                                 <th>RUT</th>
+                                <th>Eliminar</th>
                             </tr>
                         </thead>
                         <tbody class="tabla-personal">
@@ -96,12 +96,18 @@
                                 <td>{{ persona.nombre }}</td>
                                 <td>{{ persona.apellido }}</td>
                                 <td>{{ persona.rut }}</td>
+                                <td>
+                                    <form method="POST" action="{{ url_for('eliminar_personal', rut=persona.rut) }}" onsubmit="return confirm('¿Eliminar a {{ persona.nombre }} {{ persona.apellido }}?')">
+                                        <button class="btn btn-danger btn-sm">🗑️</button>
+                                    </form>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
 
+                <!-- Jefes -->
                 <div class="tabla-scroll" style="flex: 1 1 48%;">
                     <h5>🧑‍💼 Jefes</h5>
                     <table>
@@ -112,6 +118,7 @@
                                 <th>Nombre</th>
                                 <th>Apellido</th>
                                 <th>RUT</th>
+                                <th>Eliminar</th>
                             </tr>
                         </thead>
                         <tbody class="tabla-personal">
@@ -122,6 +129,11 @@
                                 <td>{{ persona.nombre }}</td>
                                 <td>{{ persona.apellido }}</td>
                                 <td>{{ persona.rut }}</td>
+                                <td>
+                                    <form method="POST" action="{{ url_for('eliminar_personal', rut=persona.rut) }}" onsubmit="return confirm('¿Eliminar a {{ persona.nombre }} {{ persona.apellido }}?')">
+                                        <button class="btn btn-danger btn-sm">🗑️</button>
+                                    </form>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -216,15 +228,16 @@
 .btn-simple:hover {
     color: darkred;
 }
-.resumen-asignacion details summary {
+.btn-danger {
+    background-color: crimson;
+    border: none;
+    padding: 4px 8px;
+    color: white;
+    border-radius: 4px;
     cursor: pointer;
-    font-size: 15px;
-    margin-bottom: 6px;
 }
-.resumen-asignacion li {
-    margin-bottom: 4px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid #ccc;
+.btn-danger:hover {
+    background-color: darkred;
 }
 </style>
 
