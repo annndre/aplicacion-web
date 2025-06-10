@@ -1485,7 +1485,7 @@ def estadisticas():
     especialidad_seleccionada = None
 
     with conexion.cursor() as cursor:
-        cursor.execute("SELECT DISTINCT centro_costo FROM registro_horas ORDER BY centro_costo")
+        cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal ORDER BY centro_costo")
         centros_costo = [fila[0] for fila in cursor.fetchall()]
 
         cursor.execute("SELECT DISTINCT especialidad FROM personal WHERE especialidad IS NOT NULL ORDER BY especialidad")
@@ -1516,13 +1516,13 @@ def estadisticas():
                 condiciones_fecha = "AND EXTRACT(YEAR FROM rh.horas_fecha) = %s AND EXTRACT(MONTH FROM rh.horas_fecha) = %s"
                 parametros.extend([anio, mes])
 
-        if especialidad_seleccionada:
+        if especialidad_seleccionada and not centro_costo_seleccionado:
             with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
                 query = f"""
                     SELECT p.nombre, p.apellido, p.rut,
-                        SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END) AS total_hn,
-                        SUM(CASE WHEN rh.horas_extras > 0 THEN rh.horas_extras ELSE 0 END) AS total_he,
-                        COUNT(DISTINCT rh.horas_fecha) FILTER (WHERE rh.horas_normales > 0 OR rh.horas_extras > 0) AS dias_trabajados,
+                        COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) AS total_hn,
+                        COALESCE(SUM(CASE WHEN rh.horas_extras > 0 THEN rh.horas_extras ELSE 0 END), 0) AS total_he,
+                        COALESCE(COUNT(DISTINCT rh.horas_fecha) FILTER (WHERE rh.horas_normales > 0 OR rh.horas_extras > 0), 0) AS dias_trabajados,
                         COUNT(*) FILTER (WHERE rh.observacion ILIKE 'L') AS licencias,
                         COUNT(*) FILTER (WHERE rh.observacion ILIKE 'P') AS permisos,
                         COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas,
@@ -1536,20 +1536,21 @@ def estadisticas():
                 cursor.execute(query, [especialidad_seleccionada] + parametros)
                 datos = cursor.fetchall()
 
-        elif centro_costo_seleccionado:
+        elif centro_costo_seleccionado and not especialidad_seleccionada:
             with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
                 query = f"""
                     SELECT p.nombre, p.apellido, p.rut,
-                        SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END) AS total_hn,
-                        SUM(CASE WHEN rh.horas_extras > 0 THEN rh.horas_extras ELSE 0 END) AS total_he,
-                        COUNT(DISTINCT rh.horas_fecha) FILTER (WHERE rh.horas_normales > 0 OR rh.horas_extras > 0) AS dias_trabajados,
+                        COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) AS total_hn,
+                        COALESCE(SUM(CASE WHEN rh.horas_extras > 0 THEN rh.horas_extras ELSE 0 END), 0) AS total_he,
+                        COALESCE(COUNT(DISTINCT rh.horas_fecha) FILTER (WHERE rh.horas_normales > 0 OR rh.horas_extras > 0), 0) AS dias_trabajados,
                         COUNT(*) FILTER (WHERE rh.observacion ILIKE 'L') AS licencias,
                         COUNT(*) FILTER (WHERE rh.observacion ILIKE 'P') AS permisos,
                         COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas,
                         COUNT(*) FILTER (WHERE rh.observacion ILIKE 'V') AS vacaciones
-                    FROM registro_horas rh
-                    LEFT JOIN personal p ON rh.rut = p.rut
-                    WHERE rh.centro_costo = %s {condiciones_fecha}
+                    FROM asignacion_personal ap
+                    JOIN personal p ON ap.rut = p.rut
+                    LEFT JOIN registro_horas rh ON p.rut = rh.rut AND rh.centro_costo = ap.centro_costo {condiciones_fecha}
+                    WHERE ap.centro_costo = %s
                     GROUP BY p.nombre, p.apellido, p.rut
                     ORDER BY p.apellido, p.nombre
                 """
