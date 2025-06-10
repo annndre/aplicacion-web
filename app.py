@@ -599,10 +599,27 @@ def ver_inventario():
 
     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
         cursor.execute("""
-            SELECT id, producto_nombre, n_serie, marca, stock_disponible, unidad, stock_critico, categoria, estado, precio_unitario
-            FROM productos
-            ORDER BY id ASC
+            SELECT p.id,
+                   p.producto_nombre,
+                   p.n_serie,
+                   p.marca,
+                   p.stock_disponible,
+                   p.unidad,
+                   p.stock_critico,
+                   p.categoria,
+                   p.estado,
+                   p.precio_unitario,
+                   COALESCE(hs.ultimo_centro_costo, 'EN BODEGA') AS centro_costo
+            FROM productos p
+            LEFT JOIN (
+                SELECT DISTINCT ON (producto_id) producto_id,
+                       centro_costo AS ultimo_centro_costo
+                FROM historial_solicitudes
+                ORDER BY producto_id, fecha_solicitud DESC
+            ) hs ON p.id = hs.producto_id
+            ORDER BY p.id ASC
         """)
+
 
         inventario = cursor.fetchall()
 
@@ -892,6 +909,11 @@ def control_gastos():
 
 #####################################################################################################
 # RUTA PARA ASIGNAR PERSONAL
+def limpiar_rut(rut):
+    return rut.replace('.', '').replace(' ', '').replace('\n', '').replace('\r', '').strip()
+
+def limpiar_texto(texto):
+    return texto.replace('\n', ' ').replace('\r', ' ').strip()
 @app.route('/asignar_personal', methods=['GET', 'POST']) 
 def asignar_personal():
     if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeT']:
@@ -908,12 +930,12 @@ def asignar_personal():
 
         # ➕ Agregar nuevo personal
         if 'agregar_personal' in request.form:
-            nuevo_nombre = request.form.get('nuevo_nombre', '').strip()
-            nuevo_apellido = request.form.get('nuevo_apellido', '').strip()
+            nuevo_nombre = limpiar_texto(request.form.get('nuevo_nombre', ''))
+            nuevo_apellido = limpiar_texto(request.form.get('nuevo_apellido', ''))
             nuevo_rut = limpiar_rut(request.form.get('nuevo_rut', ''))
-            nuevo_especialidad = request.form.get('nuevo_especialidad', '').strip()
-            nuevo_rol = request.form.get('nuevo_rol', '').strip()
-            nuevo_genero = request.form.get('nuevo_genero', '').strip()
+            nuevo_especialidad = limpiar_texto(request.form.get('nuevo_especialidad', ''))
+            nuevo_rol = limpiar_texto(request.form.get('nuevo_rol', ''))
+            nuevo_genero = limpiar_texto(request.form.get('nuevo_genero', ''))
             pago_haberes_raw = request.form.get('pago_haberes', '').strip()
 
             if not nuevo_nombre or not nuevo_apellido or not nuevo_rut or not nuevo_rol or not nuevo_genero or not pago_haberes_raw:

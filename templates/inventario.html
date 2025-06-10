@@ -50,6 +50,7 @@
                 <th>Estado</th>
                 {% if rol_usuario in ['admin', 'jefeB', 'bodega'] %}
                     <th>Editar Estado</th>
+                <th>Centro de Costo</th>
                 {% endif %}
             </tr>
         </thead>
@@ -85,6 +86,7 @@
                          <button type="submit" style="font-size: 12px; padding: 1px 6px;">✔️</button>
                     </form>
                 </td>
+                <td>{{ producto.centro_costo }}</td>
                 {% endif %}
             </tr>
             {% endfor %}
