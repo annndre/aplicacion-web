@@ -122,7 +122,7 @@
                                 title="Ej: 8, 7.5, 7,5 o L/V/F/P"
                                 placeholder="HN o L/V/F/P"
                                 class="form-control mb-1 hn_{{ dia_key }} {% if datos %}bloqueado{% endif %}"
-                                value="{{ datos.hn if datos else '' }}"
+                                value="{% if datos.observacion in ['L', 'P', 'F', 'V'] %}{{ datos.observacion }}{% elif datos.hn is not none %}{{ datos.hn }}{% endif %}"
                                 oninput="mostrarCamposPermiso(this.value, '{{ rut }}', '{{ dia_key }}')"
                                 {% if datos %}readonly{% endif %}>
 
