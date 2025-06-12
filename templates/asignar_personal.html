@@ -93,7 +93,8 @@
                             </tr>
                         </thead>
                         <tbody class="tabla-personal">
-                            {% for persona in lista_personal if persona.rol == 'Trabajador' %}
+                            {% for persona in lista_personal if persona.rol in ['Trabajador', 'Prevencionista','Administrativo','Bodeguero','Oficina tecnica'] %}
+
                             <tr>
                                 <td>{{ loop.index }}</td>
                                 <td><input type="checkbox" name="seleccionados" value="{{ persona.rut }}|{{ persona.nombre }}|{{ persona.apellido }}|{{ persona.rol }}"></td>

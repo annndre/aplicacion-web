@@ -1071,7 +1071,7 @@ def asignar_personal():
                            detalle_asignacion=detalle_asignacion)
 @app.route('/eliminar_personal/<rut>', methods=['POST'])
 def eliminar_personal(rut):
-    if 'usuario' not in session or session.get('rol') not in ['admin']:
+    if 'usuario' not in session or session.get('rol') not in ['admin','jefeT']:
         flash("No tienes acceso a esta función", "danger")
         return redirect(url_for('login'))
 
