@@ -673,6 +673,32 @@ def ver_inventario():
         tab_activa='centros' if centro_seleccionado or producto_buscado else 'general',
         rol_usuario=rol_usuario
     )
+@app.route('/editar_precio_producto', methods=['POST'])
+def editar_precio_producto():
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeB', 'bodega']:
+        flash("No tienes permiso para editar precios", "danger")
+        return redirect(url_for('ver_inventario'))
+
+    producto_id = request.form.get('producto_id')
+    nuevo_precio = request.form.get('nuevo_precio')
+
+    try:
+        nuevo_precio = float(nuevo_precio)
+    except ValueError:
+        flash("El precio debe ser un número válido", "warning")
+        return redirect(url_for('ver_inventario'))
+
+    conexion = obtener_conexion()
+    with conexion.cursor() as cursor:
+        cursor.execute("""
+            UPDATE productos
+            SET precio_unitario = %s
+            WHERE id = %s
+        """, (nuevo_precio, producto_id))
+        conexion.commit()
+
+    flash("Precio actualizado correctamente", "success")
+    return redirect(url_for('ver_inventario'))
 
 
 @app.route('/editar_estado_producto', methods=['POST'])
@@ -1264,16 +1290,20 @@ def registro_horas():
                         trabajadores = cursor.fetchall()
 
                         cursor.execute("""
-                            SELECT rut, horas_fecha, horas_normales, horas_extras
+                            SELECT rut, horas_fecha, horas_normales, horas_extras, observacion
                             FROM registro_horas
                             WHERE centro_costo = %s AND horas_fecha BETWEEN %s AND %s
                         """, (centro_costo_actual, primer_dia, domingo))
                         registros = cursor.fetchall()
 
-                        for rut, fecha, hn, he in registros:
+                        for rut, fecha, hn, he, obs in registros:
                             for k, fecha_str in fechas_por_dia.items():
                                 if fecha.strftime('%Y-%m-%d') == fecha_str:
-                                    valores_guardados.setdefault(rut, {})[k] = {'hn': hn, 'he': he}
+                                    valores_guardados.setdefault(rut, {})[k] = {
+                                    'hn': hn,
+                                    'he': he,
+                                    'observacion': obs
+                                    }
 
                 except Exception as e:
                     flash(f"⚠️ Error al procesar la semana: {e}", "danger")
@@ -1586,6 +1616,125 @@ def estadisticas():
                            especialidad_seleccionada=especialidad_seleccionada,
                            datos=datos)
 
+@app.route('/exportar_estadisticas_excel', methods=['POST'])
+def exportar_estadisticas_excel():
+    from flask import send_file, request
+    import pandas as pd
+    from io import BytesIO
+    import datetime
+
+    centro_costo = request.form.get('centro_costo')
+    especialidad = request.form.get('especialidad')
+    tipo_filtro = request.form.get('tipo_filtro')
+    fecha_filtro = request.form.get('fecha_filtro')
+
+    condiciones_fecha = ""
+    parametros = []
+
+    # 🎯 Manejo de filtros de fecha
+    if tipo_filtro and fecha_filtro:
+        if tipo_filtro == 'dia':
+            condiciones_fecha = "AND rh.horas_fecha = %s"
+            parametros.append(fecha_filtro)
+        elif tipo_filtro == 'semana':
+            anio, semana_num = map(int, fecha_filtro.split('-W'))
+            primer_dia = datetime.date.fromisocalendar(anio, semana_num, 1)
+            ultimo_dia = primer_dia + datetime.timedelta(days=6)
+            condiciones_fecha = "AND rh.horas_fecha BETWEEN %s AND %s"
+            parametros.extend([primer_dia, ultimo_dia])
+        elif tipo_filtro == 'mes':
+            anio, mes = map(int, fecha_filtro.split('-'))
+            condiciones_fecha = "AND EXTRACT(YEAR FROM rh.horas_fecha) = %s AND EXTRACT(MONTH FROM rh.horas_fecha) = %s"
+            parametros.extend([anio, mes])
+
+    conexion = obtener_conexion()
+    with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+        # Filtro por ambos: centro y especialidad
+        if centro_costo and especialidad:
+            query = f"""
+                SELECT p.nombre, p.apellido, p.rut,
+                       COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) AS total_hn,
+                       COALESCE(SUM(CASE WHEN rh.horas_extras > 0 THEN rh.horas_extras ELSE 0 END), 0) AS total_he,
+                       COALESCE(COUNT(DISTINCT rh.horas_fecha) FILTER (WHERE rh.horas_normales > 0 OR rh.horas_extras > 0), 0) AS dias_trabajados,
+                       COUNT(*) FILTER (WHERE rh.observacion ILIKE 'L') AS licencias,
+                       COUNT(*) FILTER (WHERE rh.observacion ILIKE 'P') AS permisos,
+                       COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas,
+                       COUNT(*) FILTER (WHERE rh.observacion ILIKE 'V') AS vacaciones
+                FROM asignacion_personal ap
+                JOIN personal p ON ap.rut = p.rut
+                LEFT JOIN registro_horas rh ON p.rut = rh.rut AND rh.centro_costo = ap.centro_costo {condiciones_fecha}
+                WHERE ap.centro_costo = %s AND p.especialidad = %s
+                GROUP BY p.nombre, p.apellido, p.rut
+                ORDER BY p.apellido, p.nombre
+            """
+            cursor.execute(query, [centro_costo, especialidad] + parametros)
+
+        # Solo por especialidad
+        elif especialidad and not centro_costo:
+            query = f"""
+                SELECT p.nombre, p.apellido, p.rut,
+                       COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) AS total_hn,
+                       COALESCE(SUM(CASE WHEN rh.horas_extras > 0 THEN rh.horas_extras ELSE 0 END), 0) AS total_he,
+                       COALESCE(COUNT(DISTINCT rh.horas_fecha) FILTER (WHERE rh.horas_normales > 0 OR rh.horas_extras > 0), 0) AS dias_trabajados,
+                       COUNT(*) FILTER (WHERE rh.observacion ILIKE 'L') AS licencias,
+                       COUNT(*) FILTER (WHERE rh.observacion ILIKE 'P') AS permisos,
+                       COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas,
+                       COUNT(*) FILTER (WHERE rh.observacion ILIKE 'V') AS vacaciones
+                FROM personal p
+                LEFT JOIN registro_horas rh ON p.rut = rh.rut
+                WHERE p.especialidad = %s {condiciones_fecha}
+                GROUP BY p.nombre, p.apellido, p.rut
+                ORDER BY p.apellido, p.nombre
+            """
+            cursor.execute(query, [especialidad] + parametros)
+
+        # Solo por centro
+        elif centro_costo and not especialidad:
+            query = f"""
+                SELECT p.nombre, p.apellido, p.rut,
+                       COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) AS total_hn,
+                       COALESCE(SUM(CASE WHEN rh.horas_extras > 0 THEN rh.horas_extras ELSE 0 END), 0) AS total_he,
+                       COALESCE(COUNT(DISTINCT rh.horas_fecha) FILTER (WHERE rh.horas_normales > 0 OR rh.horas_extras > 0), 0) AS dias_trabajados,
+                       COUNT(*) FILTER (WHERE rh.observacion ILIKE 'L') AS licencias,
+                       COUNT(*) FILTER (WHERE rh.observacion ILIKE 'P') AS permisos,
+                       COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas,
+                       COUNT(*) FILTER (WHERE rh.observacion ILIKE 'V') AS vacaciones
+                FROM asignacion_personal ap
+                JOIN personal p ON ap.rut = p.rut
+                LEFT JOIN registro_horas rh ON p.rut = rh.rut AND rh.centro_costo = ap.centro_costo {condiciones_fecha}
+                WHERE ap.centro_costo = %s
+                GROUP BY p.nombre, p.apellido, p.rut
+                ORDER BY p.apellido, p.nombre
+            """
+            cursor.execute(query, [centro_costo] + parametros)
+
+        else:
+            # No hay filtro, no se genera nada
+            return redirect(url_for('estadisticas'))
+
+        datos = cursor.fetchall()
+        columnas = [desc.name for desc in cursor.description]
+
+    df = pd.DataFrame(datos, columns=columnas)
+    output = BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+
+    # 🧠 Nombre dinámico del archivo
+    nombre_archivo = "estadisticas"
+    if centro_costo:
+        nombre_archivo += f"_{centro_costo.replace(' ', '_')}"
+    if especialidad:
+        nombre_archivo += f"_{especialidad.replace(' ', '_')}"
+    if tipo_filtro and fecha_filtro:
+        nombre_archivo += f"_{tipo_filtro}_{fecha_filtro.replace('-', '')}"
+
+    nombre_archivo += ".xlsx"
+
+    return send_file(output,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     download_name=nombre_archivo,
+                     as_attachment=True)
 
 ######################################################################################################333
 

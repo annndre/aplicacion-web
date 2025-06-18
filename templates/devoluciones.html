@@ -31,6 +31,7 @@
                             <th>N° Serie</th>
                             <th>Cantidad</th>
                             <th>Centro de Costo</th>
+                            <th>Nombre</th>
                             <th>RUT</th>
                             <th>Fecha</th>
                         </tr>
@@ -44,6 +45,7 @@
                             <td>{{ d.n_serie if d.n_serie else 'No registrado' }}</td>
                             <td>{{ d.cantidad }}</td>
                             <td>{{ d.centro_costo }}</td>
+                            <td>{{ d.nombre_solicitante }}</td>
                             <td class="rut-col">{{ d.rut_solicitante }}</td>
                             <td>{{ d.fecha.strftime('%Y-%m-%d') }}</td>
                         </tr>

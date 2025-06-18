@@ -5,6 +5,17 @@
 {% block content %}
 <h2>📈 Estadísticas por Centro de Costo o Especialidad</h2>
 
+<!-- Botón Exportar a Excel -->
+<form method="POST" action="{{ url_for('exportar_estadisticas_excel') }}" style="margin-top: 10px;">
+    <input type="hidden" name="centro_costo" value="{{ centro_seleccionado }}">
+    <input type="hidden" name="especialidad" value="{{ especialidad_seleccionada }}">
+    <input type="hidden" name="tipo_filtro" value="{{ tipo_filtro }}">
+    <input type="hidden" name="fecha_filtro" value="{{ fecha_filtro }}">
+    <button type="submit" class="btn btn-success">📥 Exportar a Excel</button>
+</form>
+
+
+
 <!-- FORMULARIOS -->
 <form method="POST" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 20px;" onsubmit="return validarFiltros()">
     <!-- Centro de Costo -->
@@ -30,7 +41,7 @@
     </div>
 
     <div style="align-self: flex-end;">
-        <button type="submit">🔍 Ver Estadísticas</button>
+        <button type="submit">🔍 Ver Resultados</button>
     </div>
 </form>
 

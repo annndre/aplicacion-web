@@ -47,6 +47,11 @@
                 <th>Stock Disponible</th>
                 <th>Stock Crítico</th>
                 <th>Categoría</th>
+                <th>Precio Unitario</th>
+                {% if rol_usuario in ['admin', 'bodega'] %}
+                    <th>Editar Precio</th>
+                {% endif %}
+
                 <th>Estado</th>
                 {% if rol_usuario in ['admin', 'jefeB', 'bodega'] %}
                     <th>Editar Estado</th>
@@ -62,7 +67,21 @@
                 <td>{{ producto.stock_disponible }}</td>
                 <td>{{ producto.stock_critico }}</td>
                 <td>{{ producto.categoria }}</td>
-                <td class="estado {{ 'operativo' if producto.estado == 'OPERATIVO' else 'deficiencia' if producto.estado == 'OPERATIVO CON DEFICIENCIA' else 'no-operativo' }}">{{ producto.estado }}</td>
+                <td>${{ producto.precio_unitario }}</td>
+
+                {% if rol_usuario in ['admin', 'jefeB', 'bodega'] %}
+                <td>
+                    <form method="POST" action="{{ url_for('editar_precio_producto') }}" style="display: flex; align-items: center; gap: 4px;">
+                        <input type="hidden" name="producto_id" value="{{ producto.id }}">
+                        <input type="number" name="nuevo_precio" step="0.01" min="0" value="{{ producto.precio_unitario }}" style="width: 80px; font-size: 12px;" required>
+                        <button type="submit" style="font-size: 12px; padding: 1px 6px;">💾</button>
+                    </form>
+                </td>
+                {% endif %}
+                <td class="estado {{ 'operativo' if producto.estado == 'OPERATIVO' else 'deficiencia' if producto.estado == 'OPERATIVO CON DEFICIENCIA' else 'no-operativo' }}">
+                    {{ producto.estado }}
+                </td>
+
                 {% if rol_usuario in ['admin', 'jefeB', 'bodega'] %}
                 <td>
                     <form method="POST" action="{{ url_for('editar_estado_producto') }}" style="display: flex; align-items: center; gap: 4px;">
