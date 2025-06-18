@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}📈 Estadísticas{% endblock %}
+{% block title %}📈 Resultados{% endblock %}
 
 {% block content %}
 <h2>📈 Estadísticas por Centro de Costo o Especialidad</h2>
@@ -13,8 +13,6 @@
     <input type="hidden" name="fecha_filtro" value="{{ fecha_filtro }}">
     <button type="submit" class="btn btn-success">📥 Exportar a Excel</button>
 </form>
-
-
 
 <!-- FORMULARIOS -->
 <form method="POST" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 20px;" onsubmit="return validarFiltros()">
@@ -40,6 +38,17 @@
         </select>
     </div>
 
+    <!-- Filtros de fecha -->
+    <div id="filtros_fecha" style="display: none; flex-direction: column; gap: 5px;">
+        <label><strong>Filtro opcional por fecha:</strong></label>
+        <label><input type="radio" name="tipo_filtro" value="ninguno" checked onclick="mostrarFiltroFecha()"> Sin filtro</label>
+        <label><input type="radio" name="tipo_filtro" value="semana" onclick="mostrarFiltroFecha()"> Por semana</label>
+        <label><input type="radio" name="tipo_filtro" value="mes" onclick="mostrarFiltroFecha()"> Por mes</label>
+
+        <input type="week" name="fecha_filtro" id="filtro_semana" style="display:none; padding: 5px; width: 180px;">
+        <input type="month" name="fecha_filtro" id="filtro_mes" style="display:none; padding: 5px; width: 180px;">
+    </div>
+
     <div style="align-self: flex-end;">
         <button type="submit">🔍 Ver Resultados</button>
     </div>
@@ -49,13 +58,13 @@
 {% if datos %}
 <div style="border: 1px solid #ccc; border-radius: 10px; padding: 20px; background-color: #f9f9f9;">
     <div style="overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-            <thead style="background-color: #e8e8e8;">
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px; border: 1px solid #ccc;">
+            <thead>
                 <tr>
-                    <th>#</th>
-                    <th>Nombre</th>
-                    <th>Apellido</th>
-                    <th>RUT</th>
+                    <th class="col-identidad">#</th>
+                    <th class="col-identidad">Nombre</th>
+                    <th class="col-identidad">Apellido</th>
+                    <th class="col-identidad">RUT</th>
                     <th>Horas Normales</th>
                     <th>Horas Extras</th>
                     <th>Días Trabajados</th>
@@ -75,10 +84,10 @@
                 {% set tot_V = 0 %}
                 {% for persona in datos %}
                 <tr>
-                    <td>{{ loop.index }}</td>
-                    <td>{{ persona.nombre or 'Sin nombre' }}</td>
-                    <td>{{ persona.apellido or 'Sin apellido' }}</td>
-                    <td>{{ persona.rut }}</td>
+                    <td class="col-identidad">{{ loop.index }}</td>
+                    <td class="col-identidad">{{ persona.nombre or 'Sin nombre' }}</td>
+                    <td class="col-identidad">{{ persona.apellido or 'Sin apellido' }}</td>
+                    <td class="col-identidad">{{ persona.rut }}</td>
                     <td>{{ persona.total_hn or 0 }}</td>
                     <td>{{ persona.total_he or 0 }}</td>
                     <td>{{ persona.dias_trabajados or 0 }}</td>
@@ -96,7 +105,7 @@
                 {% set tot_V = tot_V + (persona.vacaciones or 0) %}
                 {% endfor %}
             </tbody>
-            <tfoot style="background-color: #eef;">
+            <tfoot>
                 <tr>
                     <th colspan="4" style="text-align: right;">Totales:</th>
                     <th>{{ tot_hn }}</th>
@@ -121,12 +130,50 @@
 </div>
 {% endif %}
 
+<!-- ESTILOS PARA LA TABLA -->
+<style>
+    table th, table td {
+        border: 1px solid #ccc;
+        padding: 8px;
+        text-align: center;
+    }
+
+    table thead th {
+        background-color: #e8e8e8;
+    }
+
+    table tfoot {
+        background-color: #eef;
+        font-weight: bold;
+    }
+
+    table tbody tr:nth-child(odd) {
+        background-color: #fdfdfd;
+    }
+
+    table tbody tr:nth-child(even) {
+        background-color: #f5f5f5;
+    }
+
+    table tbody tr:hover {
+        background-color: #e6f7ff;
+    }
+
+    .col-identidad {
+        background-color: #d9edf7;
+        font-weight: bold;
+    }
+</style>
+
+<!-- SCRIPTS -->
 <script>
 function desactivarEspecialidad() {
     document.getElementById('especialidad').selectedIndex = 0;
+    document.getElementById('filtros_fecha').style.display = 'flex';
 }
 function desactivarCentroCosto() {
     document.getElementById('centro_costo').selectedIndex = 0;
+    document.getElementById('filtros_fecha').style.display = 'none';
 }
 function validarFiltros() {
     const centro = document.getElementById('centro_costo').value;
@@ -137,5 +184,14 @@ function validarFiltros() {
     }
     return true;
 }
+function mostrarFiltroFecha() {
+    const tipo = document.querySelector('input[name="tipo_filtro"]:checked').value;
+    document.getElementById('filtro_semana').style.display = tipo === 'semana' ? 'block' : 'none';
+    document.getElementById('filtro_mes').style.display = tipo === 'mes' ? 'block' : 'none';
+}
+window.addEventListener('DOMContentLoaded', () => {
+    const centro = document.getElementById('centro_costo').value;
+    document.getElementById('filtros_fecha').style.display = centro ? 'flex' : 'none';
+});
 </script>
 {% endblock %}

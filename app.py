@@ -473,11 +473,12 @@ def entradas():
                 flash('⚠️ Error: Debes ingresar un nombre de producto, una cantidad y un precio unitario válidos.', 'error')
                 return redirect(url_for('entradas'))
 
+            flash("ℹ️ Agrega número de serie si el producto es NUEVO (herramienta manual o eléctrica). De lo contrario, se sumará al stock disponible.", "info")
+            flash("📌 Selecciona un producto del inventario en caso que ingreses un producto existente para sumarlo a stock. En caso contrario, no selecciones un producto existente.", "info")
+
             conexion = obtener_conexion()
             with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                if producto_id_form:
-                    producto_id = int(producto_id_form)
-                else:
+                if n_serie:
                     cursor.execute("""
                         INSERT INTO productos (producto_nombre, stock_disponible, unidad, categoria, precio_unitario, marca, n_serie)
                         VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -485,7 +486,22 @@ def entradas():
                     """, (producto_nombre, cantidad, unidad, categoria, precio_unitario, marca, n_serie))
                     producto_id = cursor.fetchone()[0]
                     conexion.commit()
-                    flash(f"🆕 Producto nuevo agregado: {producto_nombre}", "info")
+                    flash(f"🆕 Producto nuevo con n° serie agregado: {producto_nombre}", "info")
+                    es_nuevo = True
+                else:
+                    if producto_id_form:
+                        producto_id = int(producto_id_form)
+                        es_nuevo = False
+                    else:
+                        cursor.execute("""
+                            INSERT INTO productos (producto_nombre, stock_disponible, unidad, categoria, precio_unitario, marca, n_serie)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            RETURNING id
+                        """, (producto_nombre, cantidad, unidad, categoria, precio_unitario, marca, n_serie))
+                        producto_id = cursor.fetchone()[0]
+                        conexion.commit()
+                        flash(f"🆕 Producto nuevo agregado: {producto_nombre}", "info")
+                        es_nuevo = True
 
             session['entrada_temporal']['productos'].append({
                 'producto_id': producto_id,
@@ -496,7 +512,7 @@ def entradas():
                 'precio_unitario': precio_unitario,
                 'marca': marca,
                 'n_serie': n_serie,
-                'es_nuevo': not producto_id_form
+                'es_nuevo': es_nuevo
             })
 
             session.modified = True
@@ -575,6 +591,7 @@ def entradas():
         mostrar_descarga=True,
         url_descarga="/descargar_excel/entradas"
     )
+
 
 
 ####################################################################################################################
@@ -1072,12 +1089,21 @@ def asignar_personal():
             cursor.execute("SELECT id_proyecto, nombre_proyecto FROM centros_costo ORDER BY id_proyecto")
         centros_costo = cursor.fetchall()
 
-        cursor.execute("""
-            SELECT centro_costo, COUNT(*) as cantidad
-            FROM asignacion_personal
-            GROUP BY centro_costo
-            ORDER BY centro_costo
-        """)
+        if rol_usuario in ['jefeT']:
+            cursor.execute("""
+                SELECT centro_costo, COUNT(*) as cantidad
+                FROM asignacion_personal
+                WHERE rut = %s
+                GROUP BY centro_costo
+                ORDER BY centro_costo
+            """, (rut_usuario,))
+        else:
+            cursor.execute("""
+                SELECT centro_costo, COUNT(*) as cantidad
+                FROM asignacion_personal
+                GROUP BY centro_costo
+                ORDER BY centro_costo
+            """)
         resumen_asignacion = cursor.fetchall()
 
         detalle_asignacion = {}
@@ -1552,11 +1578,8 @@ def estadisticas():
         condiciones_fecha = ""
         parametros = []
 
-        if tipo_filtro and fecha_filtro:
-            if tipo_filtro == 'dia':
-                condiciones_fecha = "AND rh.horas_fecha = %s"
-                parametros.append(fecha_filtro)
-            elif tipo_filtro == 'semana':
+        if tipo_filtro and tipo_filtro != 'ninguno' and fecha_filtro:
+            if tipo_filtro == 'semana':
                 anio, semana_num = map(int, fecha_filtro.split('-W'))
                 import datetime
                 primer_dia = datetime.date.fromisocalendar(anio, semana_num, 1)
@@ -1567,6 +1590,7 @@ def estadisticas():
                 anio, mes = map(int, fecha_filtro.split('-'))
                 condiciones_fecha = "AND EXTRACT(YEAR FROM rh.horas_fecha) = %s AND EXTRACT(MONTH FROM rh.horas_fecha) = %s"
                 parametros.extend([anio, mes])
+            # Se puede agregar filtro por día si se desea a futuro
 
         if especialidad_seleccionada and not centro_costo_seleccionado:
             with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
@@ -1606,7 +1630,8 @@ def estadisticas():
                     GROUP BY p.nombre, p.apellido, p.rut
                     ORDER BY p.apellido, p.nombre
                 """
-                cursor.execute(query, [centro_costo_seleccionado] + parametros)
+                # ✅ Aquí se arregla el orden de los parámetros
+                cursor.execute(query, parametros + [centro_costo_seleccionado])
                 datos = cursor.fetchall()
 
     return render_template('estadisticas.html',
@@ -1614,7 +1639,10 @@ def estadisticas():
                            especialidades=especialidades,
                            centro_seleccionado=centro_costo_seleccionado,
                            especialidad_seleccionada=especialidad_seleccionada,
+                           tipo_filtro=tipo_filtro,
+                           fecha_filtro=fecha_filtro,
                            datos=datos)
+
 
 @app.route('/exportar_estadisticas_excel', methods=['POST'])
 def exportar_estadisticas_excel():
@@ -1631,12 +1659,14 @@ def exportar_estadisticas_excel():
     condiciones_fecha = ""
     parametros = []
 
-    # 🎯 Manejo de filtros de fecha
-    if tipo_filtro and fecha_filtro:
-        if tipo_filtro == 'dia':
-            condiciones_fecha = "AND rh.horas_fecha = %s"
-            parametros.append(fecha_filtro)
-        elif tipo_filtro == 'semana':
+    # ✅ Ignorar filtro si es "ninguno" o sin fecha
+    if tipo_filtro == 'ninguno' or not fecha_filtro:
+        tipo_filtro = None
+        fecha_filtro = None
+
+    # 🎯 Manejo de filtro por semana o mes
+    elif tipo_filtro and fecha_filtro:
+        if tipo_filtro == 'semana':
             anio, semana_num = map(int, fecha_filtro.split('-W'))
             primer_dia = datetime.date.fromisocalendar(anio, semana_num, 1)
             ultimo_dia = primer_dia + datetime.timedelta(days=6)
@@ -1649,7 +1679,8 @@ def exportar_estadisticas_excel():
 
     conexion = obtener_conexion()
     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-        # Filtro por ambos: centro y especialidad
+
+        # 🧠 Filtro por ambos: centro y especialidad
         if centro_costo and especialidad:
             query = f"""
                 SELECT p.nombre, p.apellido, p.rut,
@@ -1667,9 +1698,9 @@ def exportar_estadisticas_excel():
                 GROUP BY p.nombre, p.apellido, p.rut
                 ORDER BY p.apellido, p.nombre
             """
-            cursor.execute(query, [centro_costo, especialidad] + parametros)
+            cursor.execute(query, parametros + [centro_costo, especialidad])
 
-        # Solo por especialidad
+        # Filtro solo por especialidad
         elif especialidad and not centro_costo:
             query = f"""
                 SELECT p.nombre, p.apellido, p.rut,
@@ -1688,7 +1719,7 @@ def exportar_estadisticas_excel():
             """
             cursor.execute(query, [especialidad] + parametros)
 
-        # Solo por centro
+        # Filtro solo por centro de costo
         elif centro_costo and not especialidad:
             query = f"""
                 SELECT p.nombre, p.apellido, p.rut,
@@ -1706,28 +1737,31 @@ def exportar_estadisticas_excel():
                 GROUP BY p.nombre, p.apellido, p.rut
                 ORDER BY p.apellido, p.nombre
             """
-            cursor.execute(query, [centro_costo] + parametros)
+            cursor.execute(query, parametros + [centro_costo])
 
         else:
-            # No hay filtro, no se genera nada
             return redirect(url_for('estadisticas'))
 
         datos = cursor.fetchall()
         columnas = [desc.name for desc in cursor.description]
 
+    # 📊 Exportar a Excel
     df = pd.DataFrame(datos, columns=columnas)
     output = BytesIO()
     df.to_excel(output, index=False)
     output.seek(0)
 
-    # 🧠 Nombre dinámico del archivo
+    # 📁 Nombre del archivo
     nombre_archivo = "estadisticas"
     if centro_costo:
         nombre_archivo += f"_{centro_costo.replace(' ', '_')}"
     if especialidad:
         nombre_archivo += f"_{especialidad.replace(' ', '_')}"
     if tipo_filtro and fecha_filtro:
-        nombre_archivo += f"_{tipo_filtro}_{fecha_filtro.replace('-', '')}"
+        if tipo_filtro == 'semana':
+            nombre_archivo += f"_semana_{fecha_filtro}"
+        elif tipo_filtro == 'mes':
+            nombre_archivo += f"_mes_{fecha_filtro}"
 
     nombre_archivo += ".xlsx"
 

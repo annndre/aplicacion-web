@@ -7,6 +7,16 @@
     <div class="formulario">
         <h2>📦 Registrar Entrada</h2>
 
+        <!-- ALERTAS VISIBLES PERMANENTES -->
+        <div class="alertas-visuales" style="background-color: #fff8e1; border-left: 5px solid #fbc02d; padding: 10px; margin-bottom: 15px; border-radius: 5px;">
+            <p>⚠️ <strong>Importante:</strong></p>
+            <ul style="margin-left: 20px;">
+                <li>📌 Selecciona un producto del inventario <strong>solo si quieres sumar stock</strong> a un producto existente.</li>
+                <li>🆕 Si estás ingresando una <strong>herramienta manual o eléctrica nueva</strong>, asegúrate de ingresar el <strong>número de serie</strong>.</li>
+            </ul>
+        </div>
+
+
         <form method="POST">
             <label>📑 Número de Orden de Compra:</label>
             <input type="text" name="numero_orden" value="{{ datos.get('numero_orden', '') }}">
