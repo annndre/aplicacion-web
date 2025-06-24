@@ -50,6 +50,7 @@
                 <option value="">Selecciona un rol</option>
                 <option value="jefeT">Jefe de terreno</option>
                 <option value="Administrativo">Administrativo</option>
+                <option value="Supervisor">Supervisor</option>
                 <option value="Prevencionista">prevencionista</option>
                 <option value="Oficina tecnica">Oficina tecnica</option>
                 <option value="Trabajador">Trabajador</option>
@@ -93,7 +94,7 @@
                             </tr>
                         </thead>
                         <tbody class="tabla-personal">
-                            {% for persona in lista_personal if persona.rol in ['Trabajador', 'Prevencionista','Administrativo','Bodeguero','Oficina tecnica'] %}
+                            {% for persona in lista_personal if persona.rol in ['Trabajador', 'Supervisor','Prevencionista','Administrativo','Bodeguero','Oficina tecnica'] %}
 
                             <tr>
                                 <td>{{ loop.index }}</td>

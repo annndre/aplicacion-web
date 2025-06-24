@@ -813,7 +813,7 @@ def gestionar_centros_costo():
 # RUTA PARA CONTROL DE GASTOS
 @app.route('/control_gastos', methods=['GET', 'POST'])
 def control_gastos():
-    if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeT']:
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeT', 'bodega' ]:
         flash("No tienes acceso a esta página", "danger")
         return redirect(url_for('login'))
 
@@ -1178,7 +1178,7 @@ def registro_horas():
             if semana:
                 year, week = semana.split('-W')
                 primer_dia = datetime.fromisocalendar(int(year), int(week), 1)
-                dias = ['lun', 'mar', 'mie', 'jue', 'vie']
+                dias = ['lun', 'mar', 'mie', 'jue', 'vie', 'sab', 'dom']
                 for i, d in enumerate(dias):
                     fechas_por_dia[d] = (primer_dia + timedelta(days=i)).strftime('%Y-%m-%d')
 
@@ -1217,8 +1217,8 @@ def registro_horas():
                     hn_key = f'hn_{rut}_{dia_a_guardar}'
                     he_key = f'he_{rut}_{dia_a_guardar}'
 
-                    if hn_key not in request.form:
-                        continue
+                    if hn_key not in request.form and he_key not in request.form:
+                        continue  # ⬅️ hasta acá modifiqué
 
                     hn_val = request.form.get(hn_key, '').strip().upper()
                     he_val = request.form.get(he_key, '').strip()
@@ -1287,7 +1287,8 @@ def registro_horas():
                             """, (rut, nombre, apellido, centro_costo, horas_normales, horas_extras, fecha_real, usuario, observacion, dias_trabajados, observacionP))
 
                         if not mensaje_mostrado:
-                            flash("✅ Horas editadas con éxito.", "success")
+                            flash(f"✅ Horas del día {dia_a_guardar.upper()} guardadas con éxito.", "success")
+
                             mensaje_mostrado = True
 
                     except ValueError:
@@ -1312,6 +1313,36 @@ def registro_horas():
                         fechas_por_dia[d] = fecha_dia.strftime('%Y-%m-%d')
 
                     with conexion.cursor() as cursor:
+                        finde_anterior = primer_dia - timedelta(days=2)
+                        domingo_anterior = primer_dia - timedelta(days=1)
+
+                        cursor.execute("SELECT nombre, apellido, rut FROM asignacion_personal WHERE centro_costo = %s", (centro_costo_actual,))
+                        personas = cursor.fetchall()
+
+                        for persona in personas:
+                            rut = persona[2].strip()
+                            nombre = persona[0].strip()
+                            apellido = persona[1].strip()
+
+                            for fecha_finde in [finde_anterior, domingo_anterior]:
+                                cursor.execute("""
+                                    SELECT SUM(horas_normales)
+                                    FROM registro_horas
+                                    WHERE rut = %s AND horas_fecha = %s
+                                """, (rut, fecha_finde))
+                                total_horas = cursor.fetchone()[0] or 0
+
+                                if total_horas == 0:
+                                    cursor.execute("""
+                                        INSERT INTO registro_horas (
+                                            rut, nombre, apellido, centro_costo,
+                                            horas_normales, horas_extras, horas_fecha,
+                                            fecha_registro, usuario, observacion, dias_trabajados, observacionP
+                                        ) VALUES (%s, %s, %s, %s, 9, 0, %s, CURRENT_DATE, %s, NULL, 1, NULL)
+                                    """, (rut, nombre, apellido, centro_costo_actual, fecha_finde, usuario))
+
+                        conexion.commit()
+
                         cursor.execute("SELECT nombre, apellido, rut FROM asignacion_personal WHERE centro_costo = %s", (centro_costo_actual,))
                         trabajadores = cursor.fetchall()
 
@@ -1330,6 +1361,17 @@ def registro_horas():
                                     'he': he,
                                     'observacion': obs
                                     }
+                        # 🟩 Agregar 9 horas por defecto si no existe sab o dom
+                        for trabajador in trabajadores:
+                            rut = trabajador[2].strip()
+                            for dia_key in ['sab', 'dom']:
+                                if dia_key not in valores_guardados.get(rut, {}):
+                                    valores_guardados.setdefault(rut, {})[dia_key] = {
+                                    'hn': 9,
+                                    'he': 0,
+                                    'observacion': None
+                        }
+
 
                 except Exception as e:
                     flash(f"⚠️ Error al procesar la semana: {e}", "danger")
@@ -1359,6 +1401,8 @@ def registro_horas():
                            fechas_por_dia=fechas_por_dia,
                            resumen=resumen,
                            valores_guardados=valores_guardados)
+
+
 ########################################################################################################
 @app.route('/adquisiciones', methods=['GET', 'POST'])
 def adquisiciones():
