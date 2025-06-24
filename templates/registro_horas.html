@@ -93,7 +93,7 @@
             <thead class="table-light">
                 <tr>
                     <th>Nombre Trabajador</th>
-                    {% for dia_key, nombre in [('lun', 'Lunes'), ('mar', 'Martes'), ('mie', 'Miércoles'), ('jue', 'Jueves'), ('vie', 'Viernes'), ('sab', 'Sábado'), ('dom', 'Domingo')] %}
+                    {% for dia_key, nombre in [('lun', 'Lunes'), ('mar', 'Martes'), ('mie', 'Miércoles'), ('jue', 'Jueves'), ('vie', 'Viernes')] %}
                     <th>
                         {{ nombre }}<br>
                         <span class="text-muted small">{{ fechas_por_dia[dia_key]|default('') }}</span><br>
@@ -109,7 +109,7 @@
                         <strong>{{ loop.index }}. {{ persona[0] }} {{ persona[1] }}</strong><br>
                         <span style="font-size: 0.8em; color: #666;">RUT: {{ persona[2] }}</span>
                     </td>
-                    {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie', 'sab', 'dom'] %}
+                    {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie'] %}
                     <td>
                         {% set fecha_dia = fechas_por_dia[dia_key]|default('') %}
                         {% set rut = persona[2] %}
@@ -122,12 +122,9 @@
                                 title="Ej: 8, 7.5, 7,5 o L/V/F/P"
                                 placeholder="HN o L/V/F/P"
                                 class="form-control mb-1 hn_{{ dia_key }} {% if datos %}bloqueado{% endif %}"
-                                value="{% if datos.observacion in ['L', 'P', 'F', 'V'] %}{{ datos.observacion }}
-                                        {% elif datos.hn is not none %}{{ datos.hn }}
-                                        {% elif dia_key in ['sab', 'dom'] %}9{% endif %}"
-                                {% if datos or dia_key in ['sab', 'dom'] %}readonly{% endif %}>
-
-
+                                value="{% if datos.observacion in ['L', 'P', 'F', 'V'] %}{{ datos.observacion }}{% elif datos.hn is not none %}{{ datos.hn }}{% endif %}"
+                                oninput="mostrarCamposPermiso(this.value, '{{ rut }}', '{{ dia_key }}')"
+                                {% if datos %}readonly{% endif %}>
 
                             <input type="number"
                                 name="he_{{ rut }}_{{ dia_key }}"
@@ -135,8 +132,7 @@
                                 placeholder="HE"
                                 class="form-control he_{{ dia_key }} {% if datos %}bloqueado{% endif %}"
                                 value="{{ datos.he if datos else '' }}"
-                                {% if datos or dia_key in ['sab', 'dom'] %}disabled{% endif %}>
-
+                                {% if datos %}disabled{% endif %}>
 
                             <div id="permiso_{{ rut }}_{{ dia_key }}" style="display: none; margin-top: 5px;">
                                 <select name="tipo_permiso_{{ rut }}_{{ dia_key }}" class="form-select mb-1" style="font-size: 0.85em;">
@@ -159,7 +155,7 @@
             <tfoot>
                 <tr>
                     <td></td>
-                    {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie', 'sab', 'dom'] %}
+                    {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie'] %}
                     <td style="text-align: center;">
                         <button type="submit" class="btn btn-primary btn-sm w-100 mt-2" onclick="return setDiaYEnviar('{{ dia_key }}')">
                             Guardar {{ dia_key|capitalize }}
@@ -213,7 +209,7 @@ function mostrarCamposPermiso(valor, rut, dia) {
 
 function habilitarDia(dia) {
     // Bloquea todos los días primero
-    ['lun', 'mar', 'mie', 'jue', 'vie', 'sab', 'dom'].forEach(d => {
+    ['lun', 'mar', 'mie', 'jue', 'vie'].forEach(d => {
         document.querySelectorAll('.hn_' + d).forEach(i => {
             i.setAttribute('readonly', true);
             i.classList.add('bloqueado');
