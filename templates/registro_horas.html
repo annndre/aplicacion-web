@@ -93,7 +93,7 @@
             <thead class="table-light">
                 <tr>
                     <th>Nombre Trabajador</th>
-                    {% for dia_key, nombre in [('lun', 'Lunes'), ('mar', 'Martes'), ('mie', 'Miércoles'), ('jue', 'Jueves'), ('vie', 'Viernes')] %}
+                    {% for dia_key, nombre in [('lun', 'Lunes'), ('mar', 'Martes'), ('mie', 'Miércoles'), ('jue', 'Jueves'), ('vie', 'Viernes'), ('Sab', 'Sábado'), ('Dom', 'Domingo')] %}
                     <th>
                         {{ nombre }}<br>
                         <span class="text-muted small">{{ fechas_por_dia[dia_key]|default('') }}</span><br>
@@ -109,7 +109,7 @@
                         <strong>{{ loop.index }}. {{ persona[0] }} {{ persona[1] }}</strong><br>
                         <span style="font-size: 0.8em; color: #666;">RUT: {{ persona[2] }}</span>
                     </td>
-                    {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie'] %}
+                    {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'Dom'] %}
                     <td>
                         {% set fecha_dia = fechas_por_dia[dia_key]|default('') %}
                         {% set rut = persona[2] %}
@@ -155,7 +155,7 @@
             <tfoot>
                 <tr>
                     <td></td>
-                    {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie'] %}
+                    {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'Dom'] %}
                     <td style="text-align: center;">
                         <button type="submit" class="btn btn-primary btn-sm w-100 mt-2" onclick="return setDiaYEnviar('{{ dia_key }}')">
                             Guardar {{ dia_key|capitalize }}
@@ -209,7 +209,7 @@ function mostrarCamposPermiso(valor, rut, dia) {
 
 function habilitarDia(dia) {
     // Bloquea todos los días primero
-    ['lun', 'mar', 'mie', 'jue', 'vie'].forEach(d => {
+    ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'Dom'].forEach(d => {
         document.querySelectorAll('.hn_' + d).forEach(i => {
             i.setAttribute('readonly', true);
             i.classList.add('bloqueado');

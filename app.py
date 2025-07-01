@@ -1178,7 +1178,7 @@ def registro_horas():
             if semana:
                 year, week = semana.split('-W')
                 primer_dia = datetime.fromisocalendar(int(year), int(week), 1)
-                dias = ['lun', 'mar', 'mie', 'jue', 'vie']
+                dias = ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'dom']
                 for i, d in enumerate(dias):
                     fechas_por_dia[d] = (primer_dia + timedelta(days=i)).strftime('%Y-%m-%d')
 
@@ -1306,7 +1306,7 @@ def registro_horas():
                     primer_dia = datetime.fromisocalendar(int(year), int(week), 1).date()
                     domingo = primer_dia + timedelta(days=6)
 
-                    dias = ['lun', 'mar', 'mie', 'jue', 'vie']
+                    dias = ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'Dom']
                     for i, d in enumerate(dias):
                         fecha_dia = primer_dia + timedelta(days=i)
                         fechas_por_dia[d] = fecha_dia.strftime('%Y-%m-%d')
