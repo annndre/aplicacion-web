@@ -48,7 +48,8 @@ usuarios = {
     "J.HENRIQUEZ": {"password": "J.HENRIQUEZJCM", "rol": "jefeT"},
     "O.DIAZ": {"password": "O.DIAZJCM", "rol": "jefeT"},
     "S.VILLAR": {"password": "S.VILLARJCM", "rol": "jefeT"},
-    "jefe terreno": {"password": "JEFETERRENOJCM", "rol": "jefeT"}
+    "jefe terreno": {"password": "JEFETERRENOJCM", "rol": "jefeT"},
+    "S.VILLAR2": {"password": "S.VILLAR2", "rol": "jefeT"}
 
 }
 
