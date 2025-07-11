@@ -78,7 +78,7 @@
                     </form>
                 </td>
                 {% endif %}
-                <td class="estado {{ 'operativo' if producto.estado == 'OPERATIVO' else 'deficiencia' if producto.estado == 'OPERATIVO CON DEFICIENCIA' else 'no-operativo' }}">
+                <td class="celda-estado estado {{ 'operativo' if producto.estado == 'OPERATIVO' else 'deficiencia' if producto.estado == 'OPERATIVO CON DEFICIENCIA' else 'no-operativo' }}">
                     {{ producto.estado }}
                 </td>
 
@@ -256,7 +256,8 @@ function filtrarProductos() {
 
     filas.forEach(fila => {
         const nombre = fila.cells[1].innerText.toLowerCase();
-        const estado = fila.cells[5].innerText.trim();
+        const estado = fila.querySelector('.celda-estado')?.innerText.trim() || '';
+
         const categoria = fila.cells[4].innerText.toLowerCase();
 
         const coincideNombre = nombre.includes(filtroNombre);
