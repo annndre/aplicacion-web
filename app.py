@@ -465,7 +465,7 @@ def entradas():
 
             try:
                 cantidad = int(request.form.get('cantidad', 0))
-                precio_unitario = float(request.form.get('precio_unitario', 0))
+                precio_unitario = int(request.form.get('precio_unitario', 0))
             except ValueError:
                 flash("⚠️ La cantidad y el precio unitario deben ser números válidos.", "error")
                 return redirect(url_for('entradas'))
