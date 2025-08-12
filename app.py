@@ -1532,7 +1532,7 @@ def descargar_excel(tabla):
 
     # 📦 OTROS CASOS ESTÁNDAR
     base_query = f"SELECT * FROM {tabla_map[tabla]}"
-    if tabla_map[tabla] in ["registro_horas", "registro_costos", "historial_solicitudes", "asignacion_personal"]:
+    if tabla_map[tabla] in ["registro_horas", "registro_costos", "asignacion_personal"]:
         if not centro_costo or centro_costo.strip() == "":
             return "Debes seleccionar un centro de costo antes de descargar.", 400
         base_query += " WHERE centro_costo = %s"
