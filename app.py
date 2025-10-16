@@ -661,18 +661,30 @@ def ver_inventario():
             """, (centro_seleccionado,))
             inventario_centro = cursor.fetchall()
 
+        # ✅ BLOQUE MODIFICADO: Búsqueda por Nombre O N° de Serie en Centros de Costo (TAB 2)
         if producto_buscado:
+            busqueda_patron = f"%{producto_buscado}%" # Define el patrón para usarlo dos veces
+
             cursor.execute("""
                 SELECT hs.centro_costo,
                        hs.producto_nombre,
+                       p.n_serie, -- Añadido N° de Serie
                        COALESCE(SUM(hs.cantidad), 0) - COALESCE(SUM(hd.cantidad), 0) AS cantidad_actual,
                        MAX(hs.fecha_solicitud) AS ultima_solicitud
                 FROM historial_solicitudes hs
+                
+                JOIN productos p ON hs.producto_id = p.id -- Necesario para acceder a p.n_serie
+                
                 LEFT JOIN historial_devoluciones hd 
                     ON hs.producto_id = hd.producto_id AND hs.centro_costo = hd.centro_costo
-                WHERE hs.producto_nombre ILIKE %s
-                GROUP BY hs.centro_costo, hs.producto_nombre
-            """, (f"%{producto_buscado}%",))
+                    
+                -- Lógica de búsqueda flexible: busca en Nombre O N° de Serie
+                WHERE hs.producto_nombre ILIKE %s OR p.n_serie::text ILIKE %s
+                
+                -- Se añade p.n_serie al GROUP BY
+                GROUP BY hs.centro_costo, hs.producto_nombre, p.n_serie
+            """, (busqueda_patron, busqueda_patron,)) # Se pasa el patrón dos veces
+            
             inventario_filtrado = cursor.fetchall()
 
     tab_activa = request.args.get('tab_activa', 'general')

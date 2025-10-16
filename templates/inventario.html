@@ -15,8 +15,8 @@
 <div id="tab-general" class="tab-content {% if tab_activa != 'centros' %}active{% endif %}">
     <div style="margin-bottom: 15px; display: flex; gap: 20px; flex-wrap: wrap;">
         <div>
-            <label for="buscarProducto">🔎 Buscar Producto:</label>
-            <input type="text" id="buscarProducto" placeholder="Nombre..." oninput="filtrarProductos()">
+            <label for="buscarProducto">🔎 Buscar Producto/ N° serie:</label>
+            <input type="text" id="buscarProducto" placeholder="Nombre, N° Serie, etc." oninput="filtrarProductos()">
         </div>
         <div>
             <label for="filtroEstado">📌 Estado:</label>
@@ -44,6 +44,7 @@
             <tr>
                 <th>ID Producto</th>
                 <th>Descripción/Nombre</th>
+                <th>Marca</th>
                 <th>Stock Disponible</th>
                 <th>Stock Crítico</th>
                 <th>Categoría</th>
@@ -64,6 +65,7 @@
             <tr>
                 <td>{{ producto.n_serie }}</td>
                 <td>{{ producto.producto_nombre }}</td>
+                <td>{{ producto.marca }}</td>
                 <td>{{ producto.stock_disponible }}</td>
                 <td>{{ producto.stock_critico }}</td>
                 <td>{{ producto.categoria }}</td>
@@ -249,22 +251,43 @@
 <!-- SCRIPTS -->
 <script>
 function filtrarProductos() {
-    const filtroNombre = document.getElementById('buscarProducto').value.toLowerCase();
+    // ✅ Capturamos la entrada del usuario para buscar en Nombre O N° de Serie
+    const filtroBusqueda = document.getElementById('buscarProducto').value.toLowerCase(); 
+    
     const filtroEstado = document.getElementById('filtroEstado').value;
     const filtroCategoria = document.getElementById('filtroCategoria').value.toLowerCase();
     const filas = document.querySelectorAll("#tablaInventario tr");
 
     filas.forEach(fila => {
-        const nombre = fila.cells[1].innerText.toLowerCase();
+        // [0] N° de Serie (Columna ID Producto)
+        const nSerie = fila.cells[0].innerText.toLowerCase(); 
+        
+        // [1] Descripción/Nombre
+        const nombre = fila.cells[1].innerText.toLowerCase(); 
+        
         const estado = fila.querySelector('.celda-estado')?.innerText.trim() || '';
 
-        const categoria = fila.cells[4].innerText.toLowerCase();
+        // ✅ Corregido el índice: La Categoría ahora está en la posición 6
+        // (ID(0), Nombre(1), Marca(2), StockD(3), StockC(4), Categoría(5) [ESTO ES UN ERROR EN TU TABLA, LO AJUSTAMOS ABAJO] )
+        
+        // REVISANDO TU TABLA ANTERIOR: La categoría estaba en la posición 4
+        // <th>ID Producto</th> (0: N° Serie)
+        // <th>Descripción/Nombre</th> (1)
+        // <th>Marca</th> (2) <--- NUEVA
+        // <th>Stock Disponible</th> (3) 
+        // <th>Stock Crítico</th> (4) 
+        // <th>Categoría</th> (5) <--- ANTES ERA 4
+        
+        const categoria = fila.cells[5].innerText.toLowerCase(); // ✅ Corregido a índice 5
+        
+        // ✅ Lógica de Búsqueda Flexible: Coincide si está en el Nombre O en el N° de Serie
+        const coincideBusqueda = nombre.includes(filtroBusqueda) || nSerie.includes(filtroBusqueda); 
 
-        const coincideNombre = nombre.includes(filtroNombre);
         const coincideEstado = filtroEstado === "" || estado === filtroEstado;
         const coincideCategoria = filtroCategoria === "" || categoria === filtroCategoria;
 
-        fila.style.display = coincideNombre && coincideEstado && coincideCategoria ? "" : "none";
+        // Utilizamos coincideBusqueda en lugar de coincideNombre
+        fila.style.display = coincideBusqueda && coincideEstado && coincideCategoria ? "" : "none";
     });
 }
 
@@ -280,3 +303,6 @@ function cambiarTab(tabId) {
 }
 </script>
 {% endblock %}
+
+
+
