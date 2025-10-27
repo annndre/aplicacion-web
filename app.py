@@ -631,7 +631,7 @@ def ver_inventario():
             FROM productos p
             LEFT JOIN (
                 SELECT DISTINCT ON (producto_id) producto_id,
-                       centro_costo AS ultimo_centro_costo
+                        centro_costo AS ultimo_centro_costo
                 FROM historial_solicitudes
                 ORDER BY producto_id, fecha_solicitud DESC
             ) hs ON p.id = hs.producto_id
@@ -649,17 +649,16 @@ def ver_inventario():
         centros_costo = [row[0] for row in cursor.fetchall()]
 
         if centro_seleccionado:
+            # 🎯 BLOQUE ACTUALIZADO: Carga el detalle de 'devoluciones_pendientes'
+            # Esto se alinea con el cambio realizado en inventario.html para mostrar los detalles
             cursor.execute("""
-                SELECT hs.producto_nombre,
-                       COALESCE(SUM(hs.cantidad), 0) - COALESCE(SUM(hd.cantidad), 0) AS cantidad_actual,
-                       MAX(hs.fecha_solicitud) AS ultima_solicitud
-                FROM historial_solicitudes hs
-                LEFT JOIN historial_devoluciones hd 
-                    ON hs.producto_id = hd.producto_id AND hs.centro_costo = hd.centro_costo
-                WHERE hs.centro_costo = %s
-                GROUP BY hs.producto_nombre
+                SELECT producto_nombre, n_serie, marca, cantidad, fecha, motivo, nombre_solicitante
+                FROM devoluciones_pendientes
+                WHERE centro_costo = %s
+                ORDER BY fecha DESC
             """, (centro_seleccionado,))
             inventario_centro = cursor.fetchall()
+            #  fin del bloque actualizado
 
         # ✅ BLOQUE MODIFICADO: Búsqueda por Nombre O N° de Serie en Centros de Costo (TAB 2)
         if producto_buscado:
@@ -1504,6 +1503,7 @@ def descargar_excel(tabla):
         "inventario": "productos",
         "registro_horas": "registro_horas",
         "asignacion_personal": "asignacion_personal",
+        "devoluciones_pendientes": "devoluciones_pendientes",
         "inventario_proyectos": None  # caso especial
     }
 
@@ -1515,32 +1515,62 @@ def descargar_excel(tabla):
 
     # 🎯 CASO ESPECIAL INVENTARIO PROYECTOS
     if tabla == "inventario_proyectos":
+        # Aseguramos que tenemos el centro de costo principal
+        centro_costo = request.args.get('centro_costo') 
+        # 💡 CORRECCIÓN: Obtenemos la versión corta del nombre del centro, enviada desde el HTML
+        centro_costo_corto = request.args.get('centro_costo_corto') or 'Proyecto' 
+        
         if not centro_costo or centro_costo.strip() == "":
             return "Debes seleccionar un centro de costo antes de descargar.", 400
 
-        nombre_centro = centro_costo
+        nombre_centro = centro_costo # Se mantiene el nombre completo para el nombre del archivo de descarga.
 
-
-        with conexion.cursor() as cursor:
-            cursor.execute("""
-                SELECT hs.producto_nombre,
-                       COALESCE(SUM(hs.cantidad), 0) - COALESCE(SUM(hd.cantidad), 0) AS cantidad_actual,
-                       MAX(hs.fecha_solicitud) AS ultima_solicitud
-                FROM historial_solicitudes hs
-                LEFT JOIN historial_devoluciones hd 
-                    ON hs.producto_id = hd.producto_id AND hs.centro_costo = hd.centro_costo
-                WHERE hs.centro_costo = %s
-                GROUP BY hs.producto_nombre
-            """, (nombre_centro,))
-            datos = cursor.fetchall()
+        # El query ahora selecciona todos los campos de devoluciones_pendientes
+        # filtrando por el centro_costo
+        query = f"""
+            SELECT id, nombre_solicitante, rut_solicitante, producto_id, producto_nombre, cantidad, 
+                   centro_costo, motivo, usuario, fecha, marca, n_serie
+            FROM devoluciones_pendientes
+            WHERE centro_costo = %s
+            ORDER BY fecha DESC
+        """
+        
+        # Uso de read_sql para simplificar la lectura de la base de datos
+        try:
+            # Usamos pd.read_sql para ejecutar el query y obtener el DataFrame
+            df = pd.read_sql(query, conexion, params=(nombre_centro,))
+        except Exception as e:
+            conexion.close()
+            # Manejo de errores de base de datos
+            return f"Error al leer la base de datos para {tabla}: {e}", 500
 
         conexion.close()
 
-        df = pd.DataFrame(datos, columns=["producto_nombre", "cantidad_actual", "ultima_solicitud"])
+        # Generación del Excel
         output = BytesIO()
-        df.to_excel(output, index=False)
+        writer = pd.ExcelWriter(output, engine='xlsxwriter')
+        
+        # 💡 CORRECCIÓN CLAVE: Usamos la versión corta para el nombre de la hoja.
+        # Esto evita el error "InvalidWorksheetName" de xlsxwriter.
+        sheet_name_seguro = f"Inv {centro_costo_corto}"
+        
+        # Por si acaso, si el nombre corto aun es demasiado largo (aunque el HTML ya lo trunca):
+        if len(sheet_name_seguro) > 31:
+             sheet_name_seguro = sheet_name_seguro[:31] 
+
+        df.to_excel(writer, index=False, sheet_name=sheet_name_seguro)
+        
+        # Cierra el escritor para finalizar el archivo
+        writer.close()
         output.seek(0)
-        return send_file(output, download_name=f"inventario_{nombre_centro}.xlsx", as_attachment=True)
+        
+        return send_file(
+            output, 
+            # Usamos el nombre completo en el nombre del archivo de descarga, que NO tiene restricción de 31 caracteres.
+            download_name=f"inventario_proyecto_{nombre_centro}.xlsx", 
+            as_attachment=True,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
 
     # 📦 OTROS CASOS ESTÁNDAR
     base_query = f"SELECT * FROM {tabla_map[tabla]}"

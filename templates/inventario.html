@@ -165,28 +165,38 @@
     <div style="margin-top: 10px; text-align: right;">
         <form method="GET" action="{{ url_for('descargar_excel', tabla='inventario_proyectos') }}">
             <input type="hidden" name="centro_costo" value="{{ centro_seleccionado }}">
+            <!-- CAMPO CORTO: Envía el nombre truncado (necesario para el nombre de la hoja de Excel) -->
+            <input type="hidden" name="centro_costo_corto" value="{{ centro_seleccionado[:25] | trim }}">
             <button type="submit" class="btn btn-success btn-sm">⬇️ Descargar Excel</button>
         </form>
     </div>
     {% endif %}
 
-    <!-- Tabla de inventario del centro -->
+    <!-- Tabla de inventario del centro (ACTUALIZADA) -->
     {% if inventario_centro %}
     <div style="max-height: 400px; overflow-y: auto; margin-top: 20px;">
         <table border="1" width="100%">
             <thead>
                 <tr>
                     <th>Producto</th>
-                    <th>Cantidad Disponible en Proyecto</th>
-                    <th>Última Solicitud</th>
+                    <th>N° Serie</th>
+                    <th>Marca</th>
+                    <th>Cantidad Pendiente</th>
+                    <th>Fecha de Salida</th>
+                    <th>Motivo de Salida</th>
+                    <th>Solicitante</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in inventario_centro %}
                 <tr>
                     <td>{{ item.producto_nombre }}</td>
-                    <td>{{ item.cantidad_actual }}</td>
-                    <td>{{ item.ultima_solicitud.strftime('%d-%m-%Y') if item.ultima_solicitud else '' }}</td>
+                    <td>{{ item.n_serie }}</td>
+                    <td>{{ item.marca }}</td>
+                    <td>{{ item.cantidad }}</td>
+                    <td>{{ item.fecha.strftime('%d-%m-%Y') if item.fecha else '' }}</td>
+                    <td>{{ item.motivo }}</td>
+                    <td>{{ item.nombre_solicitante }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
