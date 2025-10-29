@@ -1651,15 +1651,15 @@ def resultado_hh():
                 flash("Formato de fecha inválido. Por favor, verifica el formato (YYYY-MM para Mes, YYYY-WXX para Semana).", "warning")
                 # Si el formato falla, salimos del proceso de consulta para no intentar ejecutar SQL
                 return render_template('resultado_hh.html',
-                                       centros_costo=centros_costo,
-                                       especialidades=especialidades,
-                                       centro_seleccionado=centro_costo_seleccionado,
-                                       especialidad_seleccionada=especialidad_seleccionada,
-                                       tipo_filtro=tipo_filtro,
-                                       fecha_filtro=fecha_filtro,
-                                       datos=datos)
+                                     centros_costo=centros_costo,
+                                     especialidades=especialidades,
+                                     centro_seleccionado=centro_costo_seleccionado,
+                                     especialidad_seleccionada=especialidad_seleccionada,
+                                     tipo_filtro=tipo_filtro,
+                                     fecha_filtro=fecha_filtro,
+                                     datos=datos)
         
-        # --- B. Ejecución de la Consulta basada en la selección (Actualizada) ---
+        # --- B. Ejecución de la Consulta basada en la selección (ACTUALIZADA: COLUMNA ELIMINADA) ---
 
         try:
             if especialidad_seleccionada and not centro_costo_seleccionado:
@@ -1675,8 +1675,7 @@ def resultado_hh():
                             COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas,
                             COUNT(*) FILTER (WHERE rh.observacion ILIKE 'V') AS vacaciones,
                             
-                            -- CÁLCULOS REQUERIDOS
-                            (COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) / 9.0) AS dias_trabajados_9hr,
+                            -- CÁLCULOS REQUERIDOS (dias_trabajados_9hr eliminado)
                             (COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) * p.pago_hora) AS monto_a_pagar
                             
                         FROM personal p
@@ -1702,8 +1701,7 @@ def resultado_hh():
                             COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas,
                             COUNT(*) FILTER (WHERE rh.observacion ILIKE 'V') AS vacaciones,
 
-                            -- CÁLCULOS REQUERIDOS
-                            (COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) / 9.0) AS dias_trabajados_9hr,
+                            -- CÁLCULOS REQUERIDOS (dias_trabajados_9hr eliminado)
                             (COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) * p.pago_hora) AS monto_a_pagar
 
                         FROM asignacion_personal ap
@@ -1733,6 +1731,7 @@ def resultado_hh():
                            tipo_filtro=tipo_filtro,
                            fecha_filtro=fecha_filtro,
                            datos=datos)
+
 
 
 @app.route('/exportar_resultado_hh_excel', methods=['POST'])
@@ -1776,6 +1775,7 @@ def exportar_resultado_hh_excel():
     try:
         with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             
+            # SELECT sin 'dias_trabajados_9hr'
             select_columns = """
                 p.nombre, p.apellido, p.rut, p.pago_hora,
                 COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) AS total_hn,
@@ -1785,7 +1785,7 @@ def exportar_resultado_hh_excel():
                 COUNT(*) FILTER (WHERE rh.observacion ILIKE 'P') AS permisos,
                 COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas,
                 COUNT(*) FILTER (WHERE rh.observacion ILIKE 'V') AS vacaciones,
-                (COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) / 9.0) AS dias_trabajados_9hr,
+                -- Columna dias_trabajados_9hr ELIMINADA
                 (COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) * p.pago_hora) AS monto_a_pagar
             """
 
@@ -1846,7 +1846,7 @@ def exportar_resultado_hh_excel():
     # 📊 Exportar a Excel
     df = pd.DataFrame(datos, columns=columnas)
     
-    # Renombrar columnas para el Excel
+    # Renombrar columnas para el Excel (ACTUALIZADO: dias_trabajados_9hr eliminado)
     df.rename(columns={
         'nombre': 'Nombre',
         'apellido': 'Apellido',
@@ -1859,7 +1859,7 @@ def exportar_resultado_hh_excel():
         'permisos': 'Permisos',
         'fallas': 'Fallas',
         'vacaciones': 'Vacaciones',
-        'dias_trabajados_9hr': 'Días Trabajados (Equiv. 9hr)',
+        #'dias_trabajados_9hr': 'Días Trabajados (Equiv. 9hr)', # ELIMINADO
         'monto_a_pagar': 'Monto a Pagar (HN)'
     }, inplace=True)
     
@@ -1868,7 +1868,6 @@ def exportar_resultado_hh_excel():
         'Pago por Hora',
         'Total Horas Normales',
         'Total Horas Extras',
-        'Días Trabajados (Equiv. 9hr)',
         'Monto a Pagar (HN)'
     ]
     
@@ -1900,6 +1899,7 @@ def exportar_resultado_hh_excel():
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                      download_name=nombre_archivo,
                      as_attachment=True)
+
 ######################################################################################################333
 
 @app.route('/logout')

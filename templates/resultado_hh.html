@@ -79,7 +79,6 @@
                     <th>Días Registrados</th>
                     
                     <!-- NUEVOS CAMPOS -->
-                    <th class="col-highlight">Días Trab. (9hr)</th>
                     <th class="col-pago">Monto Normal ($)</th>
                     <!-- FIN NUEVOS CAMPOS -->
 
@@ -93,7 +92,6 @@
                 {% set tot_hn = 0 %}
                 {% set tot_he = 0 %}
                 {% set tot_dias = 0 %}
-                {% set tot_dias_9hr = 0 %}
                 {% set tot_monto_pagar = 0 %}
                 {% set tot_L = 0 %}
                 {% set tot_P = 0 %}
@@ -114,7 +112,6 @@
                     <td>{{ persona.dias_trabajados or 0 }}</td>
                     
                     <!-- DATOS CALCULADOS (FORMATO DECIMAL Y MONEDA) -->
-                    <td class="col-highlight">{{ "{:,.2f}".format(persona.dias_trabajados_9hr or 0) }}</td>
                     <td class="col-pago">${{ "{:,.0f}".format(persona.monto_a_pagar or 0) }}</td>
                     
                     <!-- OBSERVACIONES -->
@@ -127,7 +124,6 @@
                 {% set tot_hn = tot_hn + (persona.total_hn or 0) %}
                 {% set tot_he = tot_he + (persona.total_he or 0) %}
                 {% set tot_dias = tot_dias + (persona.dias_trabajados or 0) %}
-                {% set tot_dias_9hr = tot_dias_9hr + (persona.dias_trabajados_9hr or 0) %}
                 {% set tot_monto_pagar = tot_monto_pagar + (persona.monto_a_pagar or 0) %}
                 {% set tot_L = tot_L + (persona.licencias or 0) %}
                 {% set tot_P = tot_P + (persona.permisos or 0) %}
@@ -142,7 +138,6 @@
                     <th>{{ "{:,.2f}".format(tot_hn) }}</th>
                     <th>{{ "{:,.2f}".format(tot_he) }}</th>
                     <th>{{ tot_dias }}</th>
-                    <th class="col-highlight">{{ "{:,.2f}".format(tot_dias_9hr) }}</th>
                     <th class="col-pago">${{ "{:,.0f}".format(tot_monto_pagar) }}</th>
                     <th>{{ tot_V }}</th>
                     <th>{{ tot_P }}</th>
