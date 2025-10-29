@@ -1,0 +1,316 @@
+{% extends 'base.html' %}
+
+{% block title %}Resultados HH{% endblock %}
+
+{% block content %}
+<h2 style="font-size: 1.8em; color: #333; margin-bottom: 15px;">📈 Resultados de Tiempos y Pagos</h2>
+
+<!-- Botón Exportar a Excel (Mantiene los filtros actuales) -->
+<form method="POST" action="{{ url_for('exportar_resultado_hh_excel') }}" style="margin-top: 10px; margin-bottom: 20px;">
+    <input type="hidden" name="centro_costo" value="{{ centro_seleccionado or '' }}">
+    <input type="hidden" name="especialidad" value="{{ especialidad_seleccionada or '' }}">
+    <input type="hidden" name="tipo_filtro" value="{{ tipo_filtro or '' }}">
+    <input type="hidden" name="fecha_filtro" value="{{ fecha_filtro or '' }}">
+    <button type="submit" class="btn-success">📥 Exportar a Excel</button>
+</form>
+
+<!-- FORMULARIOS DE FILTROS -->
+<!-- Se han refactorizado los estilos inline para usar un div principal y mejorar la presentación -->
+<div class="filter-card">
+    <form method="POST" style="display: flex; flex-wrap: wrap; gap: 20px;" onsubmit="return validarFiltros()">
+        <!-- Centro de Costo -->
+        <div>
+            <label for="centro_costo">Centro de Costo:</label><br>
+            <select name="centro_costo" id="centro_costo" class="filter-select" onchange="manejarFiltros()">
+                <option value="">-- Todos --</option>
+                {% for centro in centros_costo %}
+                    <option value="{{ centro }}" {% if centro == centro_seleccionado %}selected{% endif %}>{{ centro }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Especialidad -->
+        <div>
+            <label for="especialidad">Especialidad:</label><br>
+            <select name="especialidad" id="especialidad" class="filter-select" onchange="manejarFiltros()">
+                <option value="">-- Todas --</option>
+                {% for esp in especialidades %}
+                    <option value="{{ esp }}" {% if esp == especialidad_seleccionada %}selected{% endif %}>{{ esp }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Filtros de fecha (SEMANA REMOVIDO) -->
+        <div class="filter-group">
+            <label style="font-weight: 600;">Filtro opcional por fecha:</label>
+            <div style="display: flex; gap: 10px; margin-bottom: 5px;">
+                <label><input type="radio" name="tipo_filtro" value="ninguno" {% if tipo_filtro == 'ninguno' or not tipo_filtro %}checked{% endif %} onclick="mostrarFiltroFecha()"> Sin filtro</label>
+                <label><input type="radio" name="tipo_filtro" value="mes" {% if tipo_filtro == 'mes' %}checked{% endif %} onclick="mostrarFiltroFecha()"> Por mes</label>
+            </div>
+            
+            <!-- ELIMINAMOS EL INPUT TYPE="WEEK" -->
+            <input type="month" name="fecha_filtro_mes" id="filtro_mes" class="filter-input" value="{{ fecha_filtro if tipo_filtro == 'mes' else '' }}">
+        </div>
+
+        <div style="align-self: flex-end;">
+            <button type="submit" class="btn-primary">🔍 Ver Resultados</button>
+        </div>
+    </form>
+</div>
+<!-- FIN FORMULARIOS -->
+
+<!-- RESULTADOS -->
+{% if datos %}
+<div style="border: 1px solid #ccc; border-radius: 10px; padding: 20px; background-color: #f9f9f9; margin-top: 20px;">
+    <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; border: 1px solid #ccc;">
+            <thead>
+                <tr>
+                    <th class="col-identidad">#</th>
+                    <th class="col-identidad">Nombre Completo</th>
+                    <th class="col-identidad">RUT</th>
+                    
+                    <!-- NUEVOS CAMPOS -->
+                    <th class="col-highlight">Pago/Hora ($)</th>
+                    <!-- FIN NUEVOS CAMPOS -->
+
+                    <th>Horas Normales (Hr)</th>
+                    <th>Horas Extras (Hr)</th>
+                    <th>Días Registrados</th>
+                    
+                    <!-- NUEVOS CAMPOS -->
+                    <th class="col-highlight">Días Trab. (9hr)</th>
+                    <th class="col-pago">Monto Normal ($)</th>
+                    <!-- FIN NUEVOS CAMPOS -->
+
+                    <th title="Vacaciones">V</th>
+                    <th title="Permisos">P</th>
+                    <th title="Licencias">L</th>
+                    <th title="Fallas">F</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set tot_hn = 0 %}
+                {% set tot_he = 0 %}
+                {% set tot_dias = 0 %}
+                {% set tot_dias_9hr = 0 %}
+                {% set tot_monto_pagar = 0 %}
+                {% set tot_L = 0 %}
+                {% set tot_P = 0 %}
+                {% set tot_F = 0 %}
+                {% set tot_V = 0 %}
+
+                {% for persona in datos %}
+                <tr>
+                    <td class="col-identidad">{{ loop.index }}</td>
+                    <td class="col-identidad" style="text-align: left;">{{ persona.nombre or '' }} {{ persona.apellido or '' }}</td>
+                    <td class="col-identidad">{{ persona.rut }}</td>
+                    
+                    <!-- DATOS POR HORA (FORMATO MONEDA) -->
+                    <td class="col-highlight">${{ "{:,.0f}".format(persona.pago_hora or 0) }}</td>
+                    
+                    <td>{{ "{:,.2f}".format(persona.total_hn or 0) }}</td>
+                    <td>{{ "{:,.2f}".format(persona.total_he or 0) }}</td>
+                    <td>{{ persona.dias_trabajados or 0 }}</td>
+                    
+                    <!-- DATOS CALCULADOS (FORMATO DECIMAL Y MONEDA) -->
+                    <td class="col-highlight">{{ "{:,.2f}".format(persona.dias_trabajados_9hr or 0) }}</td>
+                    <td class="col-pago">${{ "{:,.0f}".format(persona.monto_a_pagar or 0) }}</td>
+                    
+                    <!-- OBSERVACIONES -->
+                    <td>{{ persona.vacaciones or 0 }}</td>
+                    <td>{{ persona.permisos or 0 }}</td>
+                    <td>{{ persona.licencias or 0 }}</td>
+                    <td>{{ persona.fallas or 0 }}</td>
+                </tr>
+                
+                {% set tot_hn = tot_hn + (persona.total_hn or 0) %}
+                {% set tot_he = tot_he + (persona.total_he or 0) %}
+                {% set tot_dias = tot_dias + (persona.dias_trabajados or 0) %}
+                {% set tot_dias_9hr = tot_dias_9hr + (persona.dias_trabajados_9hr or 0) %}
+                {% set tot_monto_pagar = tot_monto_pagar + (persona.monto_a_pagar or 0) %}
+                {% set tot_L = tot_L + (persona.licencias or 0) %}
+                {% set tot_P = tot_P + (persona.permisos or 0) %}
+                {% set tot_F = tot_F + (persona.fallas or 0) %}
+                {% set tot_V = tot_V + (persona.vacaciones or 0) %}
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th colspan="3" style="text-align: right;">Totales:</th>
+                    <th class="col-highlight" style="font-style: italic;">Promedio</th> <!-- El pago/hora es individual -->
+                    <th>{{ "{:,.2f}".format(tot_hn) }}</th>
+                    <th>{{ "{:,.2f}".format(tot_he) }}</th>
+                    <th>{{ tot_dias }}</th>
+                    <th class="col-highlight">{{ "{:,.2f}".format(tot_dias_9hr) }}</th>
+                    <th class="col-pago">${{ "{:,.0f}".format(tot_monto_pagar) }}</th>
+                    <th>{{ tot_V }}</th>
+                    <th>{{ tot_P }}</th>
+                    <th>{{ tot_L }}</th>
+                    <th>{{ tot_F }}</th>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% elif centro_seleccionado or especialidad_seleccionada %}
+<div style="margin-top: 20px; color: #cc3333; font-weight: bold; background-color: #ffe0e0; padding: 15px; border-radius: 5px;">
+    ⚠️ No se encontraron registros de horas para los filtros seleccionados.
+</div>
+{% else %}
+<div style="margin-top: 20px; color: gray; font-style: italic; background-color: #e6f7ff; padding: 15px; border-radius: 5px;">
+    ℹ️ Selecciona un **Centro de Costo** o una **Especialidad** para comenzar a ver las estadísticas.
+</div>
+{% endif %}
+
+<!-- ESTILOS Y CLASES MEJORADAS -->
+<style>
+    /* Estilos de botones y selectores */
+    .btn-primary {
+        background-color: #007bff; /* Azul */
+        color: white;
+        padding: 8px 15px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+    .btn-primary:hover { background-color: #0056b3; }
+    
+    .btn-success {
+        background-color: #28a745; /* Verde */
+        color: white;
+        padding: 8px 15px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+    .btn-success:hover { background-color: #1e7e34; }
+    
+    .filter-select, .filter-input {
+        width: 250px;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+    }
+
+    /* Estilos de tabla */
+    table th, table td {
+        border: 1px solid #ccc;
+        padding: 8px;
+        text-align: center;
+        font-size: 0.9em;
+    }
+
+    table thead th {
+        background-color: #e8e8e8;
+        color: #333;
+    }
+
+    table tfoot {
+        background-color: #ddeeff;
+        font-weight: bold;
+    }
+
+    table tbody tr:nth-child(odd) {
+        background-color: #fdfdfd;
+    }
+
+    table tbody tr:nth-child(even) {
+        background-color: #f5f5f5;
+    }
+
+    table tbody tr:hover {
+        background-color: #e6f7ff;
+    }
+    
+    /* Clases para resaltar información clave */
+    .col-identidad {
+        background-color: #d9edf7; /* Azul claro para identidad */
+        font-weight: bold;
+        text-align: center;
+    }
+
+    .col-highlight {
+        background-color: #f0fff0; /* Verde muy claro para cálculos */
+        color: #008000;
+        font-weight: 600;
+    }
+
+    .col-pago {
+        background-color: #fff0f0; /* Rojo muy claro para monto final */
+        color: #cc3333;
+        font-weight: bold;
+        text-align: right;
+    }
+</style>
+
+<!-- SCRIPTS -->
+<script>
+    // Referencias a los selectores y radio buttons
+    const centroCostoSelect = document.getElementById('centro_costo');
+    const especialidadSelect = document.getElementById('especialidad');
+    // ELIMINAMOS filtroSemanaInput
+    const filtroMesInput = document.getElementById('filtro_mes');
+
+    // Función principal para manejar la interacción de filtros
+    function manejarFiltros() {
+        const centroValue = centroCostoSelect.value;
+        const especialidadValue = especialidadSelect.value;
+
+        // Regla 1: Solo uno puede tener un valor seleccionado.
+        if (centroValue && especialidadValue) {
+            // Si el usuario seleccionó CC, limpiamos Especialidad y viceversa.
+            if (event.target.id === 'centro_costo') {
+                especialidadSelect.selectedIndex = 0;
+            } else {
+                centroCostoSelect.selectedIndex = 0;
+            }
+        }
+    }
+
+    // Función para manejar la visibilidad de los inputs de fecha (ACTUALIZADA)
+    function mostrarFiltroFecha() {
+        // Se verifica si se encontró un elemento antes de acceder a .value
+        const checkedRadio = document.querySelector('input[name="tipo_filtro"]:checked');
+        const tipo = checkedRadio ? checkedRadio.value : 'ninguno'; // Asigna 'ninguno' como default si es null
+
+        // Verificación de existencia para el filtro de mes
+        if (!filtroMesInput) {
+             console.error("Error: Elemento de filtro de mes no encontrado.");
+             return;
+        }
+        
+        // Asignamos el nombre del campo que se envía en el form POST al campo visible.
+        // Ahora solo manejamos 'mes' y 'ninguno'.
+        if (tipo === 'mes') {
+            filtroMesInput.style.display = 'block';
+            filtroMesInput.setAttribute('name', 'fecha_filtro');
+        } else { // 'ninguno'
+            filtroMesInput.style.display = 'none';
+            filtroMesInput.removeAttribute('name');
+        }
+    }
+
+    // Función de validación de formulario
+    function validarFiltros() {
+        const centro = centroCostoSelect.value;
+        const esp = especialidadSelect.value;
+        
+        // La alerta debe ser un modal, no un alert nativo. Usaremos una simulación simple aquí
+        // para mantener la funcionalidad, pero es preferible usar un modal UI.
+        if (!centro && !esp) {
+            alert("Por favor, selecciona al menos un filtro (Centro de Costo o Especialidad) para ver resultados.");
+            return false;
+        }
+        return true;
+    }
+
+    // Inicialización al cargar la página
+    window.addEventListener('DOMContentLoaded', () => {
+        // Inicializa la visibilidad de los inputs de fecha según el radio button seleccionado al cargar.
+        mostrarFiltroFecha(); 
+    });
+</script>
+{% endblock %}
