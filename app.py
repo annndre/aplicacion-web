@@ -134,7 +134,7 @@ def solicitudes():
 
         with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             cursor.execute("""
-                SELECT producto_nombre, estado, precio_unitario, marca, n_serie
+                SELECT producto_nombre, estado, precio_unitario, marca, n_serie, categoria
                 FROM productos
                 WHERE id = %(id)s
             """, {'id': producto_id})
@@ -149,6 +149,7 @@ def solicitudes():
             precio_unitario = producto['precio_unitario']
             marca = producto['marca']
             n_serie = producto['n_serie']
+            categoria = producto['categoria']
 
             if estado_producto.lower().strip() != 'operativo':
                 flash(f'❌ El producto "{producto_nombre}" no se puede agregar porque no está operativo.')
@@ -174,7 +175,8 @@ def solicitudes():
             'precio_unitario': precio_unitario,
             'precio': total_precio,
             'marca': marca,
-            'n_serie': n_serie
+            'n_serie': n_serie,
+            'categoria': categoria
         })
 
         flash(f'Producto {producto_nombre} agregado.')
@@ -251,8 +253,8 @@ def confirmar_solicitud():
                     # Registrar en historial de solicitudes
                     cursor.execute("""
                         INSERT INTO historial_solicitudes 
-                        (nombre_solicitante, rut_solicitante, producto_id, producto_nombre, marca, n_serie, cantidad, centro_costo, motivo, usuario, precio)
-                        VALUES (%(nombre_solicitante)s, %(rut_solicitante)s, %(producto_id)s, %(producto_nombre)s, %(marca)s, %(n_serie)s, %(cantidad)s, %(centro_costo)s, %(motivo)s, %(usuario)s, %(precio)s)
+                        (nombre_solicitante, rut_solicitante, producto_id, producto_nombre, marca, n_serie, categoria, cantidad, centro_costo, motivo, usuario, precio)
+                        VALUES (%(nombre_solicitante)s, %(rut_solicitante)s, %(producto_id)s, %(producto_nombre)s, %(marca)s, %(n_serie)s, %(categoria)s, %(cantidad)s, %(centro_costo)s, %(motivo)s, %(usuario)s, %(precio)s)
                     """, {
                         'nombre_solicitante': datos['nombre_solicitante'],
                         'rut_solicitante': datos['rut_solicitante'],
@@ -260,6 +262,7 @@ def confirmar_solicitud():
                         'producto_nombre': item['producto_nombre'],
                         'marca': item.get('marca'),
                         'n_serie': item.get('n_serie'),
+                        'categoria': item.get('categoria'),
                         'cantidad': item['cantidad'],
                         'centro_costo': item['centro_costo'],
                         'motivo': item['motivo'],
@@ -273,8 +276,8 @@ def confirmar_solicitud():
                         print("Insertando en devoluciones_pendientes:", item)
                         cursor.execute("""
                             INSERT INTO devoluciones_pendientes 
-                            (nombre_solicitante, rut_solicitante, producto_id, producto_nombre, cantidad, centro_costo, motivo, usuario, marca, n_serie)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            (nombre_solicitante, rut_solicitante, producto_id, producto_nombre, cantidad, centro_costo, motivo, usuario, marca, n_serie, categoria)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """, (
                             datos['nombre_solicitante'],
                             datos['rut_solicitante'],
@@ -285,7 +288,8 @@ def confirmar_solicitud():
                             item['motivo'],
                             usuario,
                             item.get('marca'),
-                            item.get('n_serie')
+                            item.get('n_serie'),
+                            item.get('categoria')
                         ))
                         print("✅ INSERT ejecutado en devoluciones_pendientes")
 

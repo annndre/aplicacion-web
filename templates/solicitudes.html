@@ -30,16 +30,21 @@
         {% for producto in inventario %}
           <option value="{{ producto.id }}"
                   data-nombre="{{ producto.producto_nombre }}"
+                  data-categoria="{{ producto.categoria}}"
                   data-marca="{{ producto.marca }}"
                   data-n_serie="{{ producto.n_serie }}"
                   data-stock="{{ producto.stock_disponible }}"
                   data-estado="{{ producto.estado }}"
                   data-precio="{{ producto.precio_unitario }}">
-            {{ producto.producto_nombre }} - {{ producto.marca }} - {{ producto.n_serie }}
+            {{ producto.producto_nombre }} - {{ producto.categoria }} - {{ producto.marca }} - {{ producto.n_serie }}
           </option>
         {% endfor %}
       </select>
-      
+
+      <label>categoria:</label>
+      <input type="text" id="categoria_producto" name="categoria_producto" readonly>
+
+
       <label>Marca:</label>
       <input type="text" id="marca_producto" name="marca_producto" readonly>
 
@@ -84,6 +89,7 @@
         <li>
           <div>
             <strong>{{ item.producto_nombre }}</strong><br>
+            categoria: {{ item.categoria if item.categoria else 'No registrada' }}<br>
             Marca: {{ item.marca if item.marca else 'No registrada' }}<br>
             N° Serie: {{ item.n_serie if item.n_serie else 'No registrado' }}<br>
             Cantidad: {{ item.cantidad }}<br>
@@ -182,6 +188,7 @@ function actualizarDatosProducto() {
   }
 
   document.getElementById('producto_nombre').value = selected.getAttribute('data-nombre') || '';
+  document.getElementById('categoria_producto').value = selected.getAttribute('data-categoria') || '';
   document.getElementById('marca_producto').value = selected.getAttribute('data-marca') || '';
   document.getElementById('n_serie_producto').value = selected.getAttribute('data-n_serie') || '';
   document.getElementById('stock_disponible').value = selected.getAttribute('data-stock') || '';
