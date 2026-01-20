@@ -49,7 +49,8 @@ usuarios = {
     "O.DIAZ": {"password": "O.DIAZJCM", "rol": "jefeT"},
     "S.VILLAR": {"password": "S.VILLARJCM", "rol": "jefeT"},
     "jefe terreno": {"password": "JEFETERRENOJCM", "rol": "jefeT"},
-    "S.VILLAR2": {"password": "S.VILLAR2", "rol": "jefeT"}
+    "S.VILLAR2": {"password": "S.VILLAR2", "rol": "jefeT"},
+    "Juan": {"password": "ADMINJCM", "rol": "admin"},
 
 }
 
