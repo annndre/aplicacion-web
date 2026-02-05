@@ -82,6 +82,17 @@
             <label>💰 Precio Unitario:</label>
             <input type="number" step="1" min="0" name="precio_unitario" required>
 
+            <!-- Mejora CC -->
+            <div class="form-group">
+                <label>🏢 Asignar a Centro de Costo Destino:</label>
+                <select name="id_proyecto" class="form-control" required>
+                    <option value="BOD">-- EN BODEGA (Uso General) --</option>
+                    {% for p in proyectos %}
+                        <option value="{{ p.id_proyecto }}">{{ p.id_proyecto }} - {{ p.nombre_proyecto }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
             <button type="submit" name="agregar_producto">➕ Agregar Producto</button>
         </form>
     </div>

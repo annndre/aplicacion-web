@@ -14,10 +14,10 @@
 
     <form method="POST">
       <label>👤 Nombre del Solicitante:</label>
-      <input type="text" name="nombre_solicitante" required value="{{ datos.get('nombre_solicitante', '') }}">
+      <input type="text" id="nombre_solicitante" name="nombre_solicitante" required value="{{ datos.get('nombre_solicitante', '') }}">
 
       <label>🆔 RUT (sin puntos, con guión):</label>
-      <input type="text" name="rut_solicitante" pattern="^\d{7,8}-[\dkK]$" required value="{{ datos.get('rut_solicitante', '') }}">
+      <input type="text" id="rut_solicitante" name="rut_solicitante" pattern="^\d{7,8}-[\dkK]$" required value="{{ datos.get('rut_solicitante', '') }}">
 
       <!-- CAMPO BUSCADOR PARA FILTRAR PRODUCTOS -->
       <label>🔎 Buscar Producto:</label>
@@ -165,36 +165,33 @@
 </style>
 
 <script>
-function filtrarProductos() {
-  const input = document.getElementById('producto_nombre').value.toLowerCase().trim();
-  const select = document.getElementById('producto_id');
-  const opciones = select.options;
+// BLOQUE DE AUTOCOMPLETADO OPTIMIZADO
+document.getElementById('nombre_solicitante').addEventListener('input', function() {
+    // Forzamos mayúsculas para coincidir con tu tabla de pgAdmin
+    this.value = this.value.toUpperCase();
+    
+    const nombreSeleccionado = this.value.trim();
+    const rutInput = document.getElementById('rut_solicitante');
 
-  for (let i = 0; i < opciones.length; i++) {
-    const nombreProducto = opciones[i].textContent.toLowerCase().trim();
-    opciones[i].style.display = nombreProducto.includes(input) || opciones[i].value === '' ? "" : "none";
-  }
-}
-
-function actualizarDatosProducto() {
-  const select = document.getElementById('producto_id');
-  const selected = select.options[select.selectedIndex];
-  if (!selected || !selected.value) {
-    document.getElementById('stock_disponible').value = '';
-    document.getElementById('estado_producto').value = '';
-    document.getElementById('precio_unitario').value = '';
-    document.getElementById('cantidad').value = 1;
-    return;
-  }
-
-  document.getElementById('producto_nombre').value = selected.getAttribute('data-nombre') || '';
-  document.getElementById('categoria_producto').value = selected.getAttribute('data-categoria') || '';
-  document.getElementById('marca_producto').value = selected.getAttribute('data-marca') || '';
-  document.getElementById('n_serie_producto').value = selected.getAttribute('data-n_serie') || '';
-  document.getElementById('stock_disponible').value = selected.getAttribute('data-stock') || '';
-  document.getElementById('estado_producto').value = selected.getAttribute('data-estado') || '';
-  const precio = selected.getAttribute('data-precio') || '';
-  document.getElementById('precio_unitario').value = precio ? `$${parseFloat(precio).toFixed(2)}` : '';
-}
+    // Solo busca si hay más de 5 caracteres (ej: "SERGIO V")
+    if (nombreSeleccionado.length > 5) { // Umbral reducido para mayor agilidad
+        fetch(`/obtener_rut_solicitante?nombre=${encodeURIComponent(nombreSeleccionado)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.rut) {
+                    rutInput.value = data.rut;
+                    rutInput.style.border = "2px solid #28a745"; // Verde: Éxito
+                } else {
+                    rutInput.value = ""; // Limpia si no hay coincidencia
+                    rutInput.style.border = "1px solid #ccc";
+                }
+            })
+            .catch(error => console.error('Error:', error));
+    } else {
+        rutInput.value = "";
+        rutInput.style.border = "1px solid #ccc";
+    }
+});
 </script>
+
 {% endblock %}

@@ -196,6 +196,45 @@ def solicitudes():
         url_descarga="/descargar_excel/solicitudes"
     )
 
+@app.route('/obtener_rut_solicitante')
+def obtener_rut_solicitante():
+    # Obtenemos el texto ingresado y lo limpiamos
+    busqueda = request.args.get('nombre', '').strip()
+    if not busqueda:
+        return jsonify({'rut': ''})
+
+    # Dividimos lo ingresado en palabras para buscar cada una
+    partes = busqueda.split()
+    
+    conexion = obtener_conexion()
+    try:
+        with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+            # Creamos una búsqueda flexible: cada palabra debe estar presente
+            # en la unión de nombre + apellido
+            query = """
+                SELECT rut 
+                FROM personal 
+                WHERE (COALESCE(nombre, '') || ' ' || COALESCE(apellido, '')) ILIKE %s
+                ORDER BY (nombre || ' ' || apellido) ASC
+                LIMIT 1
+            """
+            
+            # Formateamos la búsqueda para que busque "MIGUEL%ROJAS%" 
+            # Esto permite saltarse segundos nombres intermedios
+            termino_busqueda = "%" + "%".join(partes) + "%"
+            
+            cursor.execute(query, (termino_busqueda,))
+            resultado = cursor.fetchone()
+            
+            if resultado:
+                return jsonify({'rut': resultado['rut']})
+    except Exception as e:
+        print(f"Error en autocompletado: {e}")
+    finally:
+        conexion.close()
+    
+    return jsonify({'rut': ''})
+
 @app.route('/eliminar_producto/<int:index>')
 def eliminar_producto(index):
     if 'solicitud_temporal' not in session:
@@ -445,21 +484,25 @@ def entradas():
     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
         cursor.execute("SELECT id, producto_nombre, stock_disponible, unidad, categoria FROM productos")
         inventario = cursor.fetchall()
+        cursor.execute("SELECT id_proyecto, nombre_proyecto FROM centros_costo ORDER BY id_proyecto")
+        proyectos = cursor.fetchall()
 
     if 'entrada_temporal' not in session:
         session['entrada_temporal'] = {
             'productos': [],
             'numero_orden': '',
             'numero_guia': '',
-            'numero_factura': ''
+            'numero_factura': '',
+            'id_proyecto': 'BOD'
         }
 
     if request.method == 'POST':
-
         if 'agregar_producto' in request.form:
+            # --- 1. CAPTURA DE DATOS (Solución al NameError) ---
             session['entrada_temporal']['numero_orden'] = request.form.get('numero_orden', '').strip()
             session['entrada_temporal']['numero_guia'] = request.form.get('numero_guia', '').strip()
             session['entrada_temporal']['numero_factura'] = request.form.get('numero_factura', '').strip()
+            session['entrada_temporal']['id_proyecto'] = request.form.get('id_proyecto', 'BOD')
 
             producto_id_form = request.form.get('producto_id')
             producto_nombre = request.form.get('producto_nombre', '').strip()
@@ -475,131 +518,103 @@ def entradas():
                 flash("⚠️ La cantidad y el precio unitario deben ser números válidos.", "error")
                 return redirect(url_for('entradas'))
 
-            if not producto_nombre or cantidad <= 0 or precio_unitario <= 0:
-                flash('⚠️ Error: Debes ingresar un nombre de producto, una cantidad y un precio unitario válidos.', 'error')
+            if not producto_nombre or cantidad <= 0:
+                flash('⚠️ Error: Debes ingresar un nombre de producto y una cantidad válida.', 'error')
                 return redirect(url_for('entradas'))
 
-            flash("ℹ️ Agrega número de serie si el producto es NUEVO (herramienta manual o eléctrica). De lo contrario, se sumará al stock disponible.", "info")
-            flash("📌 Selecciona un producto del inventario en caso que ingreses un producto existente para sumarlo a stock. En caso contrario, no selecciones un producto existente.", "info")
+            # --- 2. LÓGICA DE CENTRO DE COSTO ---
+            id_p = session['entrada_temporal']['id_proyecto']
+            nombre_p = next((p['nombre_proyecto'] for p in proyectos if str(p['id_proyecto']) == id_p), "BODEGA")
+            centro_final = f"{id_p} - {nombre_p}" if id_p != "BOD" else "EN BODEGA"
 
-            conexion = obtener_conexion()
+            # --- 3. PROCESAMIENTO EN BASE DE DATOS ---
             with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                if n_serie:
+                if n_serie or not producto_id_form:
                     cursor.execute("""
-                        INSERT INTO productos (producto_nombre, stock_disponible, unidad, categoria, precio_unitario, marca, n_serie)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        RETURNING id
-                    """, (producto_nombre, cantidad, unidad, categoria, precio_unitario, marca, n_serie))
+                        INSERT INTO productos (producto_nombre, stock_disponible, unidad, categoria, precio_unitario, marca, n_serie, centro_costo)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+                    """, (producto_nombre, cantidad, unidad, categoria, precio_unitario, marca, n_serie, centro_final))
                     producto_id = cursor.fetchone()[0]
                     conexion.commit()
-                    flash(f"🆕 Producto nuevo con n° serie agregado: {producto_nombre}", "info")
                     es_nuevo = True
                 else:
-                    if producto_id_form:
-                        producto_id = int(producto_id_form)
-                        es_nuevo = False
-                    else:
-                        cursor.execute("""
-                            INSERT INTO productos (producto_nombre, stock_disponible, unidad, categoria, precio_unitario, marca, n_serie)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s)
-                            RETURNING id
-                        """, (producto_nombre, cantidad, unidad, categoria, precio_unitario, marca, n_serie))
-                        producto_id = cursor.fetchone()[0]
-                        conexion.commit()
-                        flash(f"🆕 Producto nuevo agregado: {producto_nombre}", "info")
-                        es_nuevo = True
+                    producto_id = int(producto_id_form)
+                    es_nuevo = False
 
+            # --- 4. AGREGAR A LA LISTA TEMPORAL ---
             session['entrada_temporal']['productos'].append({
-                'producto_id': producto_id,
+                'producto_id': producto_id, 
                 'producto_nombre': producto_nombre,
-                'cantidad': cantidad,
-                'unidad': unidad,
-                'categoria': categoria,
+                'cantidad': cantidad, 
                 'precio_unitario': precio_unitario,
-                'marca': marca,
-                'n_serie': n_serie,
-                'es_nuevo': es_nuevo
+                'centro_costo': centro_final, 
+                'es_nuevo': es_nuevo,
+                'unidad': unidad, 
+                'categoria': categoria, 
+                'marca': marca, 
+                'n_serie': n_serie
             })
-
             session.modified = True
-            flash(f'✅ Producto agregado: {producto_nombre} - Cantidad: {cantidad} - Precio Unitario: ${precio_unitario:.2f}', 'success')
-            return redirect(url_for('entradas'))
-
-        elif 'eliminar_producto' in request.form:
-            index = int(request.form.get('eliminar_producto'))
-            if 0 <= index < len(session['entrada_temporal']['productos']):
-                eliminado = session['entrada_temporal']['productos'].pop(index)
-                session.modified = True
-                flash(f'🗑 Producto eliminado: {eliminado["producto_nombre"]}', 'warning')
+            flash(f'✅ {producto_nombre} agregado correctamente.', 'success')
             return redirect(url_for('entradas'))
 
         elif 'confirmar_entrada' in request.form:
+            # --- MEJORA: BLOQUE DE CONFIRMACIÓN CORREGIDO ---
             try:
                 usuario = session.get('usuario', 'Desconocido')
-                numero_orden = session['entrada_temporal'].get('numero_orden') or None
-                numero_guia = session['entrada_temporal'].get('numero_guia') or None
-                numero_factura = session['entrada_temporal'].get('numero_factura') or None
+                n_orden = session['entrada_temporal'].get('numero_orden')
+                n_guia = session['entrada_temporal'].get('numero_guia')
+                n_factura = session['entrada_temporal'].get('numero_factura')
 
-                if not any([numero_orden, numero_guia, numero_factura]):
-                    flash("⚠️ Debes ingresar al menos número de orden, guía o factura.", "error")
-                    return redirect(url_for('entradas'))
-
-                if not session['entrada_temporal'].get('productos'):
-                    flash('⚠️ Error: No hay productos para registrar.', 'error')
-                    return redirect(url_for('entradas'))
-
-                conexion = obtener_conexion()
                 with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
                     for producto in session['entrada_temporal']['productos']:
-                        producto_id = producto['producto_id']
-                        producto_nombre = producto['producto_nombre']
-                        cantidad = producto['cantidad']
-                        unidad = producto['unidad']
-                        categoria = producto['categoria']
-                        precio_unitario = producto['precio_unitario']
-                        marca = producto.get('marca', '')
-                        n_serie = producto.get('n_serie', '')
-
+                        # 1. Actualizar stock y centro_costo en productos existentes
                         if not producto.get('es_nuevo'):
                             cursor.execute("""
                                 UPDATE productos 
-                                SET stock_disponible = stock_disponible + %s, precio_unitario = %s
+                                SET stock_disponible = stock_disponible + %s, 
+                                    precio_unitario = %s, 
+                                    centro_costo = %s 
                                 WHERE id = %s
-                            """, (cantidad, precio_unitario, producto_id))
-                        else:
-                            cursor.execute("""
-                                UPDATE productos 
-                                SET precio_unitario = %s
-                                WHERE id = %s
-                            """, (precio_unitario, producto_id))
+                            """, (producto['cantidad'], producto['precio_unitario'], 
+                                  producto['centro_costo'], producto['producto_id']))
 
+                        # 2. Registrar en historial permanente con el Centro de Costo
                         cursor.execute("""
-                            INSERT INTO historial_entradas 
-                            (numero_orden, numero_guia, numero_factura, producto_id, producto_nombre, cantidad, unidad, categoria, precio_unitario, marca, n_serie, usuario) 
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """, (numero_orden, numero_guia, numero_factura, producto_id, producto_nombre, cantidad, unidad, categoria, precio_unitario, marca, n_serie, usuario))
+                            INSERT INTO historial_entradas (
+                                numero_orden, numero_guia, numero_factura, producto_id, 
+                                producto_nombre, cantidad, unidad, categoria, precio_unitario, 
+                                marca, n_serie, usuario, fecha_entrada, centro_costo
+                            ) 
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, %s)
+                        """, (
+                            n_orden, n_guia, n_factura, producto['producto_id'], 
+                            producto['producto_nombre'], producto['cantidad'], 
+                            producto['unidad'], producto['categoria'], 
+                            producto['precio_unitario'], producto['marca'], 
+                            producto['n_serie'], usuario, producto['centro_costo']
+                        ))
 
                 conexion.commit()
-                flash('✅ Entrada confirmada y registrada exitosamente.', 'success')
                 session.pop('entrada_temporal', None)
                 session.modified = True
+                flash('✅ Entrada registrada y historial actualizado correctamente.', 'success')
                 return redirect(url_for('entradas'))
 
             except Exception as e:
-                flash(f"❌ Error al confirmar entrada: {str(e)}", "error")
+                flash(f"❌ Error al confirmar la entrada: {str(e)}", "error")
                 return redirect(url_for('entradas'))
 
-    return render_template(
-        'entradas.html',
-        inventario=inventario,
-        productos_temporales=session['entrada_temporal']['productos'],
-        datos=session['entrada_temporal'],
-        mostrar_descarga=True,
-        url_descarga="/descargar_excel/entradas"
-    )
+    # Historial ordenado para la vista web
+    with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+        cursor.execute("SELECT * FROM historial_entradas ORDER BY fecha_entrada ASC, id ASC")
+        historial_completo = cursor.fetchall()
 
-
-
+    return render_template('entradas.html', inventario=inventario, proyectos=proyectos, 
+                           historial_entradas=historial_completo, datos=session['entrada_temporal'], 
+                           productos_temporales=session['entrada_temporal']['productos'],
+                           mostrar_descarga=True, url_descarga="/descargar_excel/entradas")
+            
 ####################################################################################################################
 @app.route('/inventario', methods=['GET', 'POST'])
 def ver_inventario():
@@ -1217,8 +1232,9 @@ def registro_horas():
                 flash("⚠️ Solo se pueden editar semanas dentro del año actual.", "warning")
                 return redirect(url_for('registro_horas'))
             
-            if semana_objetivo < semana_actual_dt - 2 or fecha_real_dt > hoy:
-                flash("⚠️ Solo se pueden editar la semana actual y las 2 anteriores.", "warning")
+            # Se cambia el -2 por -4 para permitir 4 semanas de retroactividad
+            if semana_objetivo < semana_actual_dt - 4 or fecha_real_dt > hoy:
+                flash("⚠️ Solo se pueden editar la semana actual y las 4 anteriores.", "warning")
                 return redirect(url_for('registro_horas'))
 
             mensaje_mostrado = False
@@ -1499,6 +1515,7 @@ def descargar_excel(tabla):
     import pandas as pd
     from io import BytesIO
     from flask import send_file, request
+    import os
 
     tabla_map = {
         "solicitudes": "historial_solicitudes",
@@ -1509,7 +1526,7 @@ def descargar_excel(tabla):
         "registro_horas": "registro_horas",
         "asignacion_personal": "asignacion_personal",
         "devoluciones_pendientes": "devoluciones_pendientes",
-        "inventario_proyectos": None  # caso especial
+        "inventario_proyectos": None
     }
 
     if tabla not in tabla_map:
@@ -1518,83 +1535,153 @@ def descargar_excel(tabla):
     centro_costo = request.args.get("centro_costo")
     conexion = obtener_conexion()
 
-    # 🎯 CASO ESPECIAL INVENTARIO PROYECTOS
-    if tabla == "inventario_proyectos":
-        # Aseguramos que tenemos el centro de costo principal
-        centro_costo = request.args.get('centro_costo') 
-        # 💡 CORRECCIÓN: Obtenemos la versión corta del nombre del centro, enviada desde el HTML
-        centro_costo_corto = request.args.get('centro_costo_corto') or 'Proyecto' 
-        
-        if not centro_costo or centro_costo.strip() == "":
-            return "Debes seleccionar un centro de costo antes de descargar.", 400
-
-        nombre_centro = centro_costo # Se mantiene el nombre completo para el nombre del archivo de descarga.
-
-        # El query ahora selecciona todos los campos de devoluciones_pendientes
-        # filtrando por el centro_costo
-        query = f"""
-            SELECT id, nombre_solicitante, rut_solicitante, producto_id, producto_nombre, cantidad, 
-                   centro_costo, motivo, usuario, fecha, marca, n_serie
-            FROM devoluciones_pendientes
-            WHERE centro_costo = %s
-            ORDER BY fecha DESC
-        """
-        
-        # Uso de read_sql para simplificar la lectura de la base de datos
-        try:
-            # Usamos pd.read_sql para ejecutar el query y obtener el DataFrame
-            df = pd.read_sql(query, conexion, params=(nombre_centro,))
-        except Exception as e:
-            conexion.close()
-            # Manejo de errores de base de datos
-            return f"Error al leer la base de datos para {tabla}: {e}", 500
-
+    # --- LÓGICA DE OBTENCIÓN DE DATOS (Mejorada para mayor estabilidad) ---
+    try:
+        if tabla == "inventario_proyectos":
+            centro_costo_corto = request.args.get('centro_costo_corto') or 'Proyecto' 
+            if not centro_costo or centro_costo.strip() == "":
+                return "Debes seleccionar un centro de costo antes de descargar.", 400
+            
+            nombre_archivo = f"inventario_proyecto_{centro_costo.replace(' ', '_')}.xlsx"
+            query = """
+                SELECT id, nombre_solicitante, rut_solicitante, producto_id, producto_nombre, cantidad, 
+                       centro_costo, motivo, usuario, fecha, marca, n_serie
+                FROM devoluciones_pendientes
+                WHERE centro_costo = %s ORDER BY fecha DESC
+            """
+            df = pd.read_sql(query, conexion, params=(centro_costo,))
+        else:
+            # Casos Estándar que requieren filtro por Centro de Costo
+            if tabla_map[tabla] in ["registro_horas", "registro_costos", "asignacion_personal"]:
+                if not centro_costo or centro_costo.strip() == "":
+                    return "Debes seleccionar un centro de costo antes de descargar.", 400
+                query = f"SELECT * FROM {tabla_map[tabla]} WHERE centro_costo = %s"
+                df = pd.read_sql(query, conexion, params=(centro_costo,))
+                nombre_archivo = f"{tabla_map[tabla]}_{centro_costo.replace(' ', '_')}.xlsx"
+            
+            # MEJORA IMPLEMENTADA: Ordenamiento cronológico para Entradas
+            elif tabla == "entradas":
+                query = f"SELECT * FROM {tabla_map[tabla]} ORDER BY fecha_entrada ASC, id ASC"
+                df = pd.read_sql(query, conexion)
+                nombre_archivo = f"{tabla_map[tabla]}.xlsx"
+                
+            # Resto de tablas (inventario, solicitudes, devoluciones, etc.)
+            else:
+                query = f"SELECT * FROM {tabla_map[tabla]}"
+                df = pd.read_sql(query, conexion)
+                nombre_archivo = f"{tabla_map[tabla]}.xlsx"
+    finally:
         conexion.close()
+    ############################### EDITANDO AQUI ***** ------ ****** ------
 
-        # Generación del Excel
-        output = BytesIO()
-        writer = pd.ExcelWriter(output, engine='xlsxwriter')
-        
-        # 💡 CORRECCIÓN CLAVE: Usamos la versión corta para el nombre de la hoja.
-        # Esto evita el error "InvalidWorksheetName" de xlsxwriter.
-        sheet_name_seguro = f"Inv {centro_costo_corto}"
-        
-        # Por si acaso, si el nombre corto aun es demasiado largo (aunque el HTML ya lo trunca):
-        if len(sheet_name_seguro) > 31:
-             sheet_name_seguro = sheet_name_seguro[:31] 
-
-        df.to_excel(writer, index=False, sheet_name=sheet_name_seguro)
-        
-        # Cierra el escritor para finalizar el archivo
-        writer.close()
-        output.seek(0)
-        
-        return send_file(
-            output, 
-            # Usamos el nombre completo en el nombre del archivo de descarga, que NO tiene restricción de 31 caracteres.
-            download_name=f"inventario_proyecto_{nombre_centro}.xlsx", 
-            as_attachment=True,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-
-    # 📦 OTROS CASOS ESTÁNDAR
-    base_query = f"SELECT * FROM {tabla_map[tabla]}"
-    if tabla_map[tabla] in ["registro_horas", "registro_costos", "asignacion_personal"]:
-        if not centro_costo or centro_costo.strip() == "":
-            return "Debes seleccionar un centro de costo antes de descargar.", 400
-        base_query += " WHERE centro_costo = %s"
-        df = pd.read_sql(base_query, conexion, params=(centro_costo,))
-        nombre = f"{tabla_map[tabla]}_{centro_costo}.xlsx"
-    else:
-        df = pd.read_sql(base_query, conexion)
-        nombre = f"{tabla_map[tabla]}.xlsx"
-
-    conexion.close()
-
+    # --- LÓGICA DE DISEÑO (Igual para todos) ---
+    # 1. Preparar el archivo en memoria
     output = BytesIO()
-    df.to_excel(output, index=False)
+    writer = pd.ExcelWriter(output, engine='xlsxwriter')
+    
+    # 2. Escribir los datos en la FILA 2 (startrow=1)
+    # Esto asegura que no haya filas vacías intermedias
+    df.to_excel(writer, index=False, sheet_name='Reporte', startrow=1)
+    
+    workbook  = writer.book
+    worksheet = writer.sheets['Reporte']
+
+    # 3. Formato del título compacto
+    formato_titulo = workbook.add_format({
+        'bold': True,
+        'font_size': 14, # Reducido levemente para ahorrar espacio vertical
+        'align': 'center',
+        'valign': 'vcenter',
+        'font_color': '#D45D00'
+    })
+    
+    # --- LÓGICA DE DISEÑO (Igual para todos) ---
+    output = BytesIO()
+    writer = pd.ExcelWriter(output, engine='xlsxwriter')
+    
+    # 1. Escribir estructura base (startrow=1 para el encabezado corporativo)
+    df.to_excel(writer, index=False, sheet_name='Reporte', startrow=1)
+    
+    workbook  = writer.book
+    worksheet = writer.sheets['Reporte']
+
+    # 2. Definir formatos institucionales
+    formato_cuadricula = workbook.add_format({'border': 1, 'valign': 'vcenter'})
+    
+    formato_moneda = workbook.add_format({
+        'border': 1,
+        'valign': 'vcenter',
+        'align': 'right'
+    })
+
+    formato_fecha = workbook.add_format({
+        'border': 1,
+        'num_format': 'dd-mm-yyyy',
+        'align': 'center',
+        'valign': 'vcenter'
+    })
+
+    formato_encabezado_tabla = workbook.add_format({
+        'bold': True, 'border': 1, 'bg_color': '#D9D9D9', 'align': 'center', 'valign': 'vcenter'
+    })
+
+    # 3. Aplicar a los datos con discriminación de columnas (Maestra)
+    for r_idx in range(len(df)):
+        for c_idx in range(len(df.columns)):
+            valor = df.iloc[r_idx, c_idx]
+            nombre_columna = str(df.columns[c_idx]).lower().strip()
+            
+            # --- LÓGICA DE MONEDA: Solo columnas de dinero específicas ---
+            # Esto evita afectar a "centro_costo" u otras columnas de texto
+            columnas_dinero = ['monto_registro', 'costo', 'valor_neto', 'monto']
+            
+            if nombre_columna in columnas_dinero:
+                try:
+                    valor_num = int(round(float(valor)))
+                    # Forzado por cadena: $ 253.840 absoluto
+                    valor_formateado = f"$ {valor_num:,}".replace(',', '.')
+                    worksheet.write(r_idx + 2, c_idx, valor_formateado, formato_moneda)
+                except:
+                    worksheet.write(r_idx + 2, c_idx, valor, formato_moneda)
+            
+            # --- LÓGICA DE FECHA (Independiente) ---
+            elif 'fecha' in nombre_columna:
+                try:
+                    fecha_dt = pd.to_datetime(valor)
+                    worksheet.write_datetime(r_idx + 2, c_idx, fecha_dt, formato_fecha)
+                except:
+                    worksheet.write(r_idx + 2, c_idx, valor, formato_cuadricula)
+            
+            # --- RESTO DE DATOS (Incluye centro_costo) ---
+            else:
+                worksheet.write(r_idx + 2, c_idx, valor, formato_cuadricula)
+
+    # 4. Formatear encabezados de la tabla (Fila 2)
+    for c_idx, col_name in enumerate(df.columns):
+        worksheet.write(1, c_idx, col_name, formato_encabezado_tabla)
+
+    # 5. Diseño del encabezado institucional (Fila 1)
+    ruta_logo = os.path.join(app.root_path, 'static', 'logo.png')
+    if os.path.exists(ruta_logo):
+        worksheet.insert_image('A1', ruta_logo, {
+            'x_scale': 0.35, 'y_scale': 0.35, 'x_offset': 5, 'y_offset': 0, 'object_position': 1
+        })
+
+    titulo_texto = f"REPORTE: {tabla.upper().replace('_', ' ')}"
+    if len(df.columns) > 1:
+        worksheet.merge_range(0, 1, 0, len(df.columns) - 1, titulo_texto, workbook.add_format({
+            'bold': True, 'font_size': 14, 'align': 'center', 'valign': 'vcenter', 'font_color': '#D45D00'
+        }))
+
+    # Ajustes finales de dimensiones
+    worksheet.set_row(0, 30) # Altura armoniosa compacta
+    for i, col in enumerate(df.columns):
+        max_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
+        worksheet.set_column(i, i, max_len)
+
+    writer.close()
     output.seek(0)
-    return send_file(output, download_name=nombre, as_attachment=True)
+    return send_file(output, download_name=nombre_archivo, as_attachment=True)
 
 #####################################################################################################################################
 @app.route('/resultado_hh', methods=['GET', 'POST'])
