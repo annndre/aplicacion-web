@@ -1517,6 +1517,7 @@ def descargar_excel(tabla):
     from flask import send_file, request
     import os
 
+    # Mapeo de tablas para la base de datos
     tabla_map = {
         "solicitudes": "historial_solicitudes",
         "devoluciones": "historial_devoluciones",
@@ -1535,11 +1536,10 @@ def descargar_excel(tabla):
     centro_costo = request.args.get("centro_costo")
     conexion = obtener_conexion()
 
-    # --- LÓGICA DE OBTENCIÓN DE DATOS (Mejorada para mayor estabilidad) ---
     try:
+        # Lógica de obtención de datos según el módulo
         if tabla == "inventario_proyectos":
-            centro_costo_corto = request.args.get('centro_costo_corto') or 'Proyecto' 
-            if not centro_costo or centro_costo.strip() == "":
+            if not centro_costo:
                 return "Debes seleccionar un centro de costo antes de descargar.", 400
             
             nombre_archivo = f"inventario_proyecto_{centro_costo.replace(' ', '_')}.xlsx"
@@ -1551,132 +1551,83 @@ def descargar_excel(tabla):
             """
             df = pd.read_sql(query, conexion, params=(centro_costo,))
         else:
-            # Casos Estándar que requieren filtro por Centro de Costo
             if tabla_map[tabla] in ["registro_horas", "registro_costos", "asignacion_personal"]:
-                if not centro_costo or centro_costo.strip() == "":
+                if not centro_costo:
                     return "Debes seleccionar un centro de costo antes de descargar.", 400
                 query = f"SELECT * FROM {tabla_map[tabla]} WHERE centro_costo = %s"
                 df = pd.read_sql(query, conexion, params=(centro_costo,))
                 nombre_archivo = f"{tabla_map[tabla]}_{centro_costo.replace(' ', '_')}.xlsx"
-            
-            # MEJORA IMPLEMENTADA: Ordenamiento cronológico para Entradas
-            elif tabla == "entradas":
-                query = f"SELECT * FROM {tabla_map[tabla]} ORDER BY fecha_entrada ASC, id ASC"
-                df = pd.read_sql(query, conexion)
-                nombre_archivo = f"{tabla_map[tabla]}.xlsx"
-                
-            # Resto de tablas (inventario, solicitudes, devoluciones, etc.)
             else:
                 query = f"SELECT * FROM {tabla_map[tabla]}"
                 df = pd.read_sql(query, conexion)
                 nombre_archivo = f"{tabla_map[tabla]}.xlsx"
+        
+        # Limpieza de valores nulos para estabilidad del Excel
+        df = df.fillna('')
     finally:
         conexion.close()
-    ############################### EDITANDO AQUI ***** ------ ****** ------
 
-    # --- LÓGICA DE DISEÑO (Igual para todos) ---
-    # 1. Preparar el archivo en memoria
+    # --- LÓGICA DE DISEÑO INSTITUCIONAL ---
     output = BytesIO()
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
     
-    # 2. Escribir los datos en la FILA 2 (startrow=1)
-    # Esto asegura que no haya filas vacías intermedias
+    # Escribir datos a partir de la fila 2 (índice 1)
     df.to_excel(writer, index=False, sheet_name='Reporte', startrow=1)
     
     workbook  = writer.book
     worksheet = writer.sheets['Reporte']
 
-    # 3. Formato del título compacto
-    formato_titulo = workbook.add_format({
-        'bold': True,
-        'font_size': 14, # Reducido levemente para ahorrar espacio vertical
-        'align': 'center',
-        'valign': 'vcenter',
-        'font_color': '#D45D00'
-    })
-    
-    # --- LÓGICA DE DISEÑO (Igual para todos) ---
-    output = BytesIO()
-    writer = pd.ExcelWriter(output, engine='xlsxwriter')
-    
-    # 1. Escribir estructura base (startrow=1 para el encabezado corporativo)
-    df.to_excel(writer, index=False, sheet_name='Reporte', startrow=1)
-    
-    workbook  = writer.book
-    worksheet = writer.sheets['Reporte']
-
-    # 2. Definir formatos institucionales
+    # Definición de formatos
     formato_cuadricula = workbook.add_format({'border': 1, 'valign': 'vcenter'})
-    
-    formato_moneda = workbook.add_format({
-        'border': 1,
-        'valign': 'vcenter',
-        'align': 'right'
-    })
+    formato_moneda = workbook.add_format({'border': 1, 'num_format': '"$ "#,##0', 'align': 'right', 'valign': 'vcenter'})
+    formato_fecha = workbook.add_format({'border': 1, 'num_format': 'dd-mm-yyyy', 'align': 'center', 'valign': 'vcenter'})
+    formato_encabezado_tabla = workbook.add_format({'bold': True, 'border': 1, 'bg_color': '#D9D9D9', 'align': 'center', 'valign': 'vcenter'})
+    formato_titulo = workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center', 'valign': 'vcenter', 'font_color': '#D45D00'})
 
-    formato_fecha = workbook.add_format({
-        'border': 1,
-        'num_format': 'dd-mm-yyyy',
-        'align': 'center',
-        'valign': 'vcenter'
-    })
-
-    formato_encabezado_tabla = workbook.add_format({
-        'bold': True, 'border': 1, 'bg_color': '#D9D9D9', 'align': 'center', 'valign': 'vcenter'
-    })
-
-    # 3. Aplicar a los datos con discriminación de columnas (Maestra)
+    # Aplicar formatos a las celdas de datos
     for r_idx in range(len(df)):
         for c_idx in range(len(df.columns)):
             valor = df.iloc[r_idx, c_idx]
             nombre_columna = str(df.columns[c_idx]).lower().strip()
             
-            # --- LÓGICA DE MONEDA: Solo columnas de dinero específicas ---
-            # Esto evita afectar a "centro_costo" u otras columnas de texto
-            columnas_dinero = ['monto_registro', 'costo', 'valor_neto', 'monto']
-            
-            if nombre_columna in columnas_dinero:
+            # Formato de Moneda para columnas específicas
+            columnas_dinero = ['monto_registro', 'costo', 'valor_neto', 'monto', 'precio_unitario']
+            if nombre_columna in columnas_dinero and valor != '':
                 try:
-                    valor_num = int(round(float(valor)))
-                    # Forzado por cadena: $ 253.840 absoluto
-                    valor_formateado = f"$ {valor_num:,}".replace(',', '.')
-                    worksheet.write(r_idx + 2, c_idx, valor_formateado, formato_moneda)
+                    worksheet.write(r_idx + 2, c_idx, float(valor), formato_moneda)
                 except:
-                    worksheet.write(r_idx + 2, c_idx, valor, formato_moneda)
+                    worksheet.write(r_idx + 2, c_idx, valor, formato_cuadricula)
             
-            # --- LÓGICA DE FECHA (Independiente) ---
-            elif 'fecha' in nombre_columna:
+            # Formato de Fecha
+            elif 'fecha' in nombre_columna and valor != '':
                 try:
                     fecha_dt = pd.to_datetime(valor)
                     worksheet.write_datetime(r_idx + 2, c_idx, fecha_dt, formato_fecha)
                 except:
                     worksheet.write(r_idx + 2, c_idx, valor, formato_cuadricula)
             
-            # --- RESTO DE DATOS (Incluye centro_costo) ---
+            # Formato General (Cuadriculado)
             else:
                 worksheet.write(r_idx + 2, c_idx, valor, formato_cuadricula)
 
-    # 4. Formatear encabezados de la tabla (Fila 2)
+    # Escribir encabezados con formato gris (Fila 2)
     for c_idx, col_name in enumerate(df.columns):
         worksheet.write(1, c_idx, col_name, formato_encabezado_tabla)
 
-    # 5. Diseño del encabezado institucional (Fila 1)
+    # Insertar Logo de la Empresa (Fila 1)
     ruta_logo = os.path.join(app.root_path, 'static', 'logo.png')
     if os.path.exists(ruta_logo):
-        worksheet.insert_image('A1', ruta_logo, {
-            'x_scale': 0.35, 'y_scale': 0.35, 'x_offset': 5, 'y_offset': 0, 'object_position': 1
-        })
+        worksheet.insert_image('A1', ruta_logo, {'x_scale': 0.35, 'y_scale': 0.35, 'x_offset': 5, 'y_offset': 0})
 
+    # Insertar Título Centrado (Fila 1)
     titulo_texto = f"REPORTE: {tabla.upper().replace('_', ' ')}"
     if len(df.columns) > 1:
-        worksheet.merge_range(0, 1, 0, len(df.columns) - 1, titulo_texto, workbook.add_format({
-            'bold': True, 'font_size': 14, 'align': 'center', 'valign': 'vcenter', 'font_color': '#D45D00'
-        }))
+        worksheet.merge_range(0, 1, 0, len(df.columns) - 1, titulo_texto, formato_titulo)
 
     # Ajustes finales de dimensiones
-    worksheet.set_row(0, 30) # Altura armoniosa compacta
+    worksheet.set_row(0, 30) 
     for i, col in enumerate(df.columns):
-        max_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
+        max_len = max(df[col].astype(str).map(len).max(), len(col)) + 4
         worksheet.set_column(i, i, max_len)
 
     writer.close()
