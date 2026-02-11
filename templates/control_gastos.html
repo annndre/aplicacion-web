@@ -7,9 +7,7 @@
 <div class="contenedor-flex">
     <div class="formulario">
         <h2>💰 Registrar Gasto</h2>
-
         <form method="POST">
-            <!-- Centro de Costo -->
             <label>🏢 Centro de Costo:</label>
             <select name="centro_costo" required>
                 <option value="">Selecciona un centro de costo</option>
@@ -17,9 +15,7 @@
                 <option value="{{ centro }}">{{ centro }}</option>
                 {% endfor %}
             </select>
-            <small style="color: #888;">Solo verás centros a los que fuiste asignado</small>
 
-            <!-- Categoría -->
             <label>📂 Categoría:</label>
             <select name="categoria" required>
                 <option value="">Selecciona una categoría</option>
@@ -28,10 +24,8 @@
                 {% endfor %}
             </select>
 
-            <!-- Documento -->
             <div style="border-top: 1px solid #ccc; margin-top: 20px; padding-top: 10px;">
-                <h3 style="color: #444;">📄 Agregar factura, boleta o código del registro</h3>
-
+                <h3 style="color: #444;">📄 Detalle del Documento</h3>
                 <label>🗓️ Fecha:</label>
                 <input type="date" name="fecha_factura">
 
@@ -52,88 +46,155 @@
                 <input type="text" name="registro_compra">
 
                 <label>💰 Monto NETO registro (SIN PUNTOS!):</label>
-                <input type="number" name="monto_registro" min="0">
+                <input type="number" name="monto_registro" min="0" placeholder="Ej: 15000">
 
                 <label>💳 Tipo de Pago (SIN TILDES!):</label>
                 <input type="text" name="tipo_pago" placeholder="Ej: Contado, Credito a 30 dias, Cheque, Transferencia">
             </div>
 
-            <button type="submit" name="confirmar_adquisiciones">✅ Registrar</button>
+            <button type="submit" name="agregar_a_vista_previa" style="background-color: #2196F3;">➕ Agregar a Vista Previa</button>
         </form>
     </div>
 
     <div class="lista-solicitudes">
-
-        <!-- Descarga por centro de costo -->
         <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
             <form method="GET" action="{{ url_descarga }}" style="display: flex; gap: 10px; align-items: center;">
-                <label for="centro_costo_export" style="margin-bottom: 0;">⬇️ Exportar Gastos:</label>
-                <select name="centro_costo" id="centro_costo_export" class="form-select form-select-sm" style="width: 200px;">
-                    <option value="" disabled selected>Selecciona un centro de costo</option>
+                <label>⬇️ Exportar:</label>
+                <select name="centro_costo" class="form-select form-select-sm" style="width: 200px;">
+                    <option value="" disabled selected>Centro de costo</option>
                     {% for centro in centros_costo %}
                         <option value="{{ centro }}">{{ centro }}</option>
                     {% endfor %}
                 </select>
-                <button type="submit" class="btn btn-success btn-sm">📥 Descargar Excel</button>
+                <button type="submit" class="btn btn-success btn-sm">📥 Excel</button>
             </form>
         </div>
+
+        <hr>
+
+        <div class="mini-tabla-stock">
+            <h3>📋 Planilla de Edición y Vista Previa</h3>
+            
+            <form method="POST" action="{{ url_for('guardar_cambios_planilla') }}">
+                <div class="tabla-scroll-total">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Acción</th>
+                                <th>Centro de Costo</th>
+                                <th>Fecha</th>
+                                <th>Tipo Doc.</th>
+                                <th>N° Doc.</th>
+                                <th>Descripción</th>
+                                <th>Monto</th>
+                                <th>Tipo Pago</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if gastos_temporales %}
+                                {% for gasto in gastos_temporales %}
+                                <tr>
+                                    <td style="text-align: center;">
+                                        <a href="{{ url_for('eliminar_gasto_temporal', index=loop.index0) }}" title="Eliminar">❌</a>
+                                    </td>
+                                    <td><input type="text" name="centro_{{ loop.index0 }}" value="{{ gasto.centro_costo }}" class="input-editable"></td>
+                                    <td><input type="date" name="fecha_{{ loop.index0 }}" value="{{ gasto.fecha }}" class="input-editable"></td>
+                                    <td>
+                                        <select name="tipo_{{ loop.index0 }}" class="input-editable">
+                                            <option value="Factura" {% if gasto.tipo_documento == 'Factura' %}selected{% endif %}>Factura</option>
+                                            <option value="Boleta" {% if gasto.tipo_documento == 'Boleta' %}selected{% endif %}>Boleta</option>
+                                            <option value="Codigo" {% if gasto.tipo_documento == 'Codigo' %}selected{% endif %}>Codigo</option>
+                                            <option value="Orden de compra" {% if gasto.tipo_documento == 'Orden de compra' %}selected{% endif %}>O. Compra</option>
+                                        </select>
+                                    </td>
+                                    <td><input type="text" name="numero_{{ loop.index0 }}" value="{{ gasto.numero_documento }}" class="input-editable"></td>
+                                    <td><input type="text" name="desc_{{ loop.index0 }}" value="{{ gasto.registro_compra }}" class="input-editable"></td>
+                                    <td><input type="number" name="monto_{{ loop.index0 }}" value="{{ gasto.monto_registro }}" class="input-editable"></td>
+                                    <td><input type="text" name="pago_{{ loop.index0 }}" value="{{ gasto.tipo_pago }}" class="input-editable"></td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr><td colspan="8" style="text-align: center; padding: 20px;">Planilla vacía. Agrega gastos para previsualizar.</td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if gastos_temporales %}
+                <div style="margin-top: 10px; display: flex; gap: 10px;">
+                    <button type="submit" style="background-color: #3498db; flex: 1; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">💾 Guardar Cambios en Planilla</button>
+                </div>
+                {% endif %}
+            </form>
+
+            {% if gastos_temporales %}
+            <form method="POST" style="margin-top: 10px;">
+                <button type="submit" name="confirmar_subida_definitiva" style="background-color: #4CAF50; width: 100%; color: white; padding: 12px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">🚀 Confirmar Planilla y Subir al Sistema</button>
+            </form>
+            {% endif %}
+        </div>
         
-        <!-- Mensajes Flash -->
-        <ul class="alertas">
+        <ul class="alertas" style="margin-top: 20px;">
             {% with messages = get_flashed_messages() %}
-            {% for message in messages %}
-            <li class="alert">{{ message }}</li>
-            {% endfor %}
+                {% for message in messages %}<li class="alert">{{ message }}</li>{% endfor %}
             {% endwith %}
         </ul>
-
     </div>
 </div>
 
 <style>
-.contenedor-flex {
-    display: flex;
-    gap: 20px;
+.contenedor-flex { display: flex; gap: 20px; }
+.formulario, .lista-solicitudes { width: 50%; background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); }
+
+/* CONTENEDOR DE PLANILLA CON DOBLE SCROLL */
+.tabla-scroll-total { 
+    max-height: 400px; /* Altura fija para activar scroll vertical */
+    max-width: 100%; 
+    overflow-x: auto; /* Scroll horizontal */
+    overflow-y: auto; /* Scroll vertical */
+    border: 1px solid #bcbcbc; 
+    border-radius: 8px; 
+    position: relative;
 }
-.formulario, .lista-solicitudes {
-    width: 50%;
-    background-color: white;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+
+.tabla-scroll-total table { 
+    width: 100%; 
+    min-width: 1200px; /* Ancho mínimo para activar scroll horizontal */
+    border-collapse: collapse; 
+    font-size: 12px; 
 }
-.mini-tabla-stock {
-    margin-top: 20px;
+
+/* ENCABEZADOS FIJOS (STICKY) */
+.tabla-scroll-total th { 
+    background-color: #2c3e50; 
+    color: white; 
+    position: sticky; 
+    top: 0; /* Mantiene el encabezado arriba al hacer scroll vertical */
+    z-index: 10; 
+    padding: 12px 10px; 
+    border: 1px solid #455a64; 
+    white-space: nowrap; 
 }
-.tabla-scroll {
-    max-height: 200px;
-    overflow-y: auto;
-    border: 1px solid #ccc;
-    border-radius: 8px;
+
+.tabla-scroll-total td { padding: 5px; border: 1px solid #ddd; }
+
+/* ESTILO DE CAMPOS EDITABLES */
+.input-editable {
+    width: 100%; 
+    border: 1px solid #ccc; 
+    padding: 4px; 
+    font-size: 11px; 
+    border-radius: 3px; 
+    background-color: #fffdec;
 }
-.tabla-scroll table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 14px;
+.input-editable:focus { 
+    border-color: #2196F3; 
+    outline: none; 
+    background-color: #fff; 
 }
-.tabla-scroll th, .tabla-scroll td {
-    border: 1px solid #ddd;
-    padding: 8px;
-    text-align: left;
-}
-.tabla-scroll th {
-    background-color: #f2f2f2;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-}
-.alertas .alert {
-    background-color: #ffb5b5;
-    border: 1px solid #fd8f8f;
-    padding: 8px;
-    margin: 5px 0;
-    border-radius: 5px;
-}
+
+.alertas .alert { background-color: #ffb5b5; border: 1px solid #fd8f8f; padding: 8px; margin: 5px 0; border-radius: 5px; list-style: none; }
+button:hover { filter: brightness(90%); }
 </style>
 
 {% endblock %}

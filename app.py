@@ -845,143 +845,149 @@ def gestionar_centros_costo():
 # RUTA PARA CONTROL DE GASTOS
 @app.route('/control_gastos', methods=['GET', 'POST'])
 def control_gastos():
-    if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeT', 'bodega' ]:
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeT', 'bodega']:
         flash("No tienes acceso a esta página", "danger")
         return redirect(url_for('login'))
+
+    # Inicializar lista temporal en la sesión si no existe
+    if 'gastos_temporales' not in session:
+        session['gastos_temporales'] = []
 
     conexion = obtener_conexion()
     centros_costo = []
     rol_usuario = session.get('rol')
     rut_usuario = session.get('rut')
 
-    print("🧪 ROL:", rol_usuario)
-    print("🧪 RUT del usuario:", rut_usuario)
-
     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
         if rol_usuario == 'admin':
-            cursor.execute("""
-                SELECT DISTINCT centro_costo
-                FROM asignacion_personal
-                ORDER BY centro_costo
-            """)
+            cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal ORDER BY centro_costo")
         else:
             cursor.execute("""
-                SELECT DISTINCT centro_costo
-                FROM asignacion_personal
+                SELECT DISTINCT centro_costo FROM asignacion_personal 
                 WHERE REPLACE(REPLACE(rut, '.', ''), ' ', '') = REPLACE(REPLACE(%s, '.', ''), ' ', '')
                 ORDER BY centro_costo
             """, (rut_usuario,))
         centros_costo = [row['centro_costo'] for row in cursor.fetchall()]
-        print("🎯 Centros recuperados:", centros_costo)
 
-    # Registro de gastos
-    if request.method == 'POST' and 'confirmar_adquisiciones' in request.form:
-        centro_costo = request.form.get('centro_costo', '').strip()
-        categoria = request.form.get('categoria', '').strip()
-        fecha = request.form.get('fecha_factura', '').strip() or None
-        tipo_documento = request.form.get('tipo_documento', '').strip()
-        numero_documento = request.form.get('numero_factura', '').strip() or None
-        registro_compra = request.form.get('registro_compra', '').strip() or None
-        tipo_pago = request.form.get('tipo_pago', '').strip()
-        usuario_actual = session.get('usuario')
-
+    # ACCIÓN 1: Agregar a la Vista Previa (Temporal)
+    if request.method == 'POST' and 'agregar_a_vista_previa' in request.form:
+        monto_raw = request.form.get('monto_registro', '').strip()
+        
+        # Validación de monto para evitar errores de tipo en Jinja2
         try:
-            monto_raw = request.form.get('monto_registro', '').strip()
-            monto_registro = int(monto_raw) if monto_raw else None
+            monto_valor = int(monto_raw) if monto_raw else 0
         except ValueError:
-            flash("⚠️ El monto del registro debe ser un número entero válido.", "error")
+            flash("⚠️ El monto debe ser un número entero válido.", "error")
             return redirect(url_for('control_gastos'))
 
-        if not centro_costo or not categoria or not tipo_documento:
-            flash("⚠️ Debes completar todos los campos obligatorios.", "error")
-            return redirect(url_for('control_gastos'))
+        # Captura de datos con la llave 'monto_registro' sincronizada con el HTML
+        nuevo_gasto = {
+            'centro_costo': request.form.get('centro_costo', '').strip(),
+            'categoria': request.form.get('categoria', '').strip(),
+            'fecha': request.form.get('fecha_factura', '').strip(),
+            'tipo_documento': request.form.get('tipo_documento', '').strip(),
+            'numero_documento': request.form.get('numero_factura', '').strip(),
+            'registro_compra': request.form.get('registro_compra', '').strip(),
+            'tipo_pago': request.form.get('tipo_pago', '').strip(),
+            'monto_registro': monto_valor, # Sincronizado para image_8553c5.png
+            'usuario': session.get('usuario')
+        }
 
-        with conexion.cursor() as cursor:
-            cursor.execute("""
-                SELECT 1 FROM registro_costos
-                WHERE centro_costo = %s AND categoria = %s AND fecha = %s
-                      AND tipo_documento = %s AND numero_documento = %s
-            """, (centro_costo, categoria, fecha, tipo_documento, numero_documento))
-            existe = cursor.fetchone()
-
-            if existe:
-                flash("⚠️ Ese registro ya fue ingresado previamente.", "warning")
-                return redirect(url_for('control_gastos'))
-
-            try:
-                cursor.execute("""
-                    INSERT INTO registro_costos (
-                        centro_costo, categoria, fecha, tipo_documento,
-                        numero_documento, registro_compra, monto_registro, usuario, tipo_pago
-                    )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    centro_costo, categoria, fecha, tipo_documento,
-                    numero_documento, registro_compra, monto_registro, usuario_actual, tipo_pago
-                ))
-
-                # También insertar en facturaOC si corresponde
-                if tipo_documento.lower() == 'factura' and numero_documento:
-                    cursor.execute("""
-                        INSERT INTO facturaOC (
-                            numero_factura, fecha_factura, rut_proveedor,
-                            nombre_proveedor, orden_compra, monto_factura, origen
-                        )
-                        VALUES (%s, %s, NULL, NULL, NULL, %s, %s)
-                    """, (
-                        numero_documento, fecha, monto_registro, 'control_gastos'
-                    ))
-
-                elif tipo_documento.lower() == 'orden de compra' and numero_documento:
-                    cursor.execute("""
-                        INSERT INTO facturaOC (
-                            orden_compra, monto_factura, origen
-                        )
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT (orden_compra) DO NOTHING
-                    """, (
-                        numero_documento, monto_registro, 'control_gastos'
-                    ))
-
-                conexion.commit()
-                flash("✅ Registro guardado correctamente.", "success")
-
-            except psycopg2.IntegrityError as e:
-                conexion.rollback()
-                flash("⚠️ Error inesperado al guardar el registro.", "danger")
-                print("ERROR DETALLE:", e)
-
+        if not nuevo_gasto['centro_costo'] or not nuevo_gasto['categoria']:
+            flash("⚠️ Completa los campos obligatorios (Centro de Costo y Categoría).", "error")
+        else:
+            session['gastos_temporales'].append(nuevo_gasto)
+            session.modified = True
+            flash("📝 Gasto agregado a la vista previa.", "info")
         return redirect(url_for('control_gastos'))
 
-    # Mostrar registros y categorías
+    # ACCIÓN 2: Confirmar y Subir definitivamente a la Base de Datos
+    if request.method == 'POST' and 'confirmar_subida_definitiva' in request.form:
+        if not session.get('gastos_temporales'):
+            flash("⚠️ No hay datos en la vista previa para subir.", "warning")
+            return redirect(url_for('control_gastos'))
+
+        try:
+            with conexion.cursor() as cursor:
+                for gasto in session['gastos_temporales']:
+                    # Inserción en tabla principal
+                    cursor.execute("""
+                        INSERT INTO registro_costos (
+                            centro_costo, categoria, fecha, tipo_documento,
+                            numero_documento, registro_compra, monto_registro, usuario, tipo_pago
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (gasto['centro_costo'], gasto['categoria'], gasto['fecha'] or None, 
+                          gasto['tipo_documento'], gasto['numero_documento'] or None, 
+                          gasto['registro_compra'], gasto['monto_registro'], 
+                          gasto['usuario'], gasto['tipo_pago']))
+
+                    # Lógica para replicar en facturaOC si es Factura u OC
+                    if gasto['tipo_documento'].lower() in ['factura', 'orden de compra'] and gasto['numero_documento']:
+                        cursor.execute("""
+                            INSERT INTO facturaOC (numero_factura, fecha_factura, monto_factura, origen)
+                            VALUES (%s, %s, %s, %s)
+                        """, (gasto['numero_documento'], gasto['fecha'], gasto['monto_registro'], 'control_gastos'))
+
+                conexion.commit()
+                session.pop('gastos_temporales', None) # Limpieza tras éxito
+                flash("✅ Todos los registros han sido subidos exitosamente.", "success")
+        except Exception as e:
+            conexion.rollback()
+            flash(f"❌ Error crítico al subir datos: {str(e)}", "danger")
+        finally:
+            conexion.close()
+        return redirect(url_for('control_gastos'))
+
+    # Carga de historial y categorías para la vista
     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-        cursor.execute("""
-            SELECT centro_costo, categoria, fecha, tipo_documento, numero_documento, 
-                   registro_compra, monto_registro, usuario, tipo_pago
-            FROM registro_costos
-            ORDER BY fecha DESC
-        """)
+        cursor.execute("SELECT * FROM registro_costos ORDER BY fecha DESC LIMIT 50")
         gastos_guardados = cursor.fetchall()
-
-        cursor.execute("""
-            SELECT DISTINCT categoria
-            FROM clasificacion_costos
-            ORDER BY categoria ASC
-        """)
+        cursor.execute("SELECT DISTINCT categoria FROM clasificacion_costos ORDER BY categoria ASC")
         categorias = cursor.fetchall()
-
-    print("📋 Centros enviados al HTML:", centros_costo)
+    conexion.close()
 
     return render_template(
         'control_gastos.html',
         historial_adquisiciones=gastos_guardados,
+        gastos_temporales=session.get('gastos_temporales', []),
         centros_costo=centros_costo,
         categorias=categorias,
         mostrar_descarga=True,
         url_descarga="/descargar_excel/gastos"
     )
+    
+#################################
+@app.route('/eliminar_gasto_temporal/<int:index>')
+def eliminar_gasto_temporal(index):
+    if 'gastos_temporales' in session:
+        try:
+            # Elimina el registro por su posición en la lista
+            session['gastos_temporales'].pop(index)
+            session.modified = True
+            flash("🗑️ Registro eliminado de la vista previa.", "info")
+        except IndexError:
+            flash("⚠️ No se pudo encontrar el registro a eliminar.", "error")
+    return redirect(url_for('control_gastos'))
 
-
+#################################
+@app.route('/guardar_cambios_planilla', methods=['POST'])
+def guardar_cambios_planilla():
+    if 'gastos_temporales' in session:
+        for i in range(len(session['gastos_temporales'])):
+            session['gastos_temporales'][i]['centro_costo'] = request.form.get(f'centro_{i}')
+            session['gastos_temporales'][i]['fecha'] = request.form.get(f'fecha_{i}')
+            session['gastos_temporales'][i]['tipo_documento'] = request.form.get(f'tipo_{i}')
+            session['gastos_temporales'][i]['numero_documento'] = request.form.get(f'numero_{i}')
+            session['gastos_temporales'][i]['registro_compra'] = request.form.get(f'desc_{i}')
+            session['gastos_temporales'][i]['tipo_pago'] = request.form.get(f'pago_{i}') # Agregado para sintonía total
+            
+            # CONVERSIÓN NECESARIA:
+            monto_editado = request.form.get(f'monto_{i}')
+            session['gastos_temporales'][i]['monto_registro'] = int(monto_editado) if monto_editado else 0
+        
+        session.modified = True
+        flash("💾 Planilla actualizada correctamente.", "success")
+    return redirect(url_for('control_gastos'))
 #####################################################################################################
 # RUTA PARA ASIGNAR PERSONAL
 def limpiar_rut(rut):
