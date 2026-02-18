@@ -614,7 +614,7 @@ def entradas():
                            historial_entradas=historial_completo, datos=session['entrada_temporal'], 
                            productos_temporales=session['entrada_temporal']['productos'],
                            mostrar_descarga=True, url_descarga="/descargar_excel/entradas")
-            
+                
 ####################################################################################################################
 @app.route('/inventario', methods=['GET', 'POST'])
 def ver_inventario():
@@ -843,6 +843,8 @@ def gestionar_centros_costo():
 
 #######################################################################################################################
 # RUTA PARA CONTROL DE GASTOS
+from datetime import datetime, timedelta, date
+
 @app.route('/control_gastos', methods=['GET', 'POST'])
 def control_gastos():
     if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeT', 'bodega']:
@@ -862,6 +864,7 @@ def control_gastos():
         if rol_usuario == 'admin':
             cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal ORDER BY centro_costo")
         else:
+            # Normalización de RUT para asegurar coincidencia en la consulta
             cursor.execute("""
                 SELECT DISTINCT centro_costo FROM asignacion_personal 
                 WHERE REPLACE(REPLACE(rut, '.', ''), ' ', '') = REPLACE(REPLACE(%s, '.', ''), ' ', '')
@@ -873,14 +876,13 @@ def control_gastos():
     if request.method == 'POST' and 'agregar_a_vista_previa' in request.form:
         monto_raw = request.form.get('monto_registro', '').strip()
         
-        # Validación de monto para evitar errores de tipo en Jinja2
+        # Mejora: Validación y conversión a float para evitar errores NaN en Excel
         try:
-            monto_valor = int(monto_raw) if monto_raw else 0
+            monto_valor = float(monto_raw) if monto_raw else 0.0
         except ValueError:
-            flash("⚠️ El monto debe ser un número entero válido.", "error")
+            flash("⚠️ El monto debe ser un valor numérico válido.", "error")
             return redirect(url_for('control_gastos'))
 
-        # Captura de datos con la llave 'monto_registro' sincronizada con el HTML
         nuevo_gasto = {
             'centro_costo': request.form.get('centro_costo', '').strip(),
             'categoria': request.form.get('categoria', '').strip(),
@@ -889,12 +891,12 @@ def control_gastos():
             'numero_documento': request.form.get('numero_factura', '').strip(),
             'registro_compra': request.form.get('registro_compra', '').strip(),
             'tipo_pago': request.form.get('tipo_pago', '').strip(),
-            'monto_registro': monto_valor, # Sincronizado para image_8553c5.png
+            'monto_registro': monto_valor, # Sincronizado con la columna de la DB
             'usuario': session.get('usuario')
         }
 
         if not nuevo_gasto['centro_costo'] or not nuevo_gasto['categoria']:
-            flash("⚠️ Completa los campos obligatorios (Centro de Costo y Categoría).", "error")
+            flash("⚠️ Campos obligatorios faltantes (Centro de Costo y Categoría).", "error")
         else:
             session['gastos_temporales'].append(nuevo_gasto)
             session.modified = True
@@ -910,7 +912,7 @@ def control_gastos():
         try:
             with conexion.cursor() as cursor:
                 for gasto in session['gastos_temporales']:
-                    # Inserción en tabla principal
+                    # Inserción en registro_costos
                     cursor.execute("""
                         INSERT INTO registro_costos (
                             centro_costo, categoria, fecha, tipo_documento,
@@ -921,7 +923,7 @@ def control_gastos():
                           gasto['registro_compra'], gasto['monto_registro'], 
                           gasto['usuario'], gasto['tipo_pago']))
 
-                    # Lógica para replicar en facturaOC si es Factura u OC
+                    # Sincronización con tabla facturaOC para documentos tributarios
                     if gasto['tipo_documento'].lower() in ['factura', 'orden de compra'] and gasto['numero_documento']:
                         cursor.execute("""
                             INSERT INTO facturaOC (numero_factura, fecha_factura, monto_factura, origen)
@@ -929,22 +931,24 @@ def control_gastos():
                         """, (gasto['numero_documento'], gasto['fecha'], gasto['monto_registro'], 'control_gastos'))
 
                 conexion.commit()
-                session.pop('gastos_temporales', None) # Limpieza tras éxito
-                flash("✅ Todos los registros han sido subidos exitosamente.", "success")
+                session.pop('gastos_temporales', None)
+                flash("✅ Registros procesados exitosamente en la base de datos.", "success")
         except Exception as e:
-            conexion.rollback()
-            flash(f"❌ Error crítico al subir datos: {str(e)}", "danger")
+            if conexion: conexion.rollback()
+            flash(f"❌ Error al procesar la subida: {str(e)}", "danger")
         finally:
-            conexion.close()
+            if conexion: conexion.close()
         return redirect(url_for('control_gastos'))
 
-    # Carga de historial y categorías para la vista
-    with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-        cursor.execute("SELECT * FROM registro_costos ORDER BY fecha DESC LIMIT 50")
-        gastos_guardados = cursor.fetchall()
-        cursor.execute("SELECT DISTINCT categoria FROM clasificacion_costos ORDER BY categoria ASC")
-        categorias = cursor.fetchall()
-    conexion.close()
+    # Carga de datos para renderizar la vista
+    try:
+        with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+            cursor.execute("SELECT * FROM registro_costos ORDER BY fecha DESC LIMIT 50")
+            gastos_guardados = cursor.fetchall()
+            cursor.execute("SELECT DISTINCT categoria FROM clasificacion_costos ORDER BY categoria ASC")
+            categorias = cursor.fetchall()
+    finally:
+        if conexion: conexion.close()
 
     return render_template(
         'control_gastos.html',
@@ -979,14 +983,17 @@ def guardar_cambios_planilla():
             session['gastos_temporales'][i]['tipo_documento'] = request.form.get(f'tipo_{i}')
             session['gastos_temporales'][i]['numero_documento'] = request.form.get(f'numero_{i}')
             session['gastos_temporales'][i]['registro_compra'] = request.form.get(f'desc_{i}')
-            session['gastos_temporales'][i]['tipo_pago'] = request.form.get(f'pago_{i}') # Agregado para sintonía total
+            session['gastos_temporales'][i]['tipo_pago'] = request.form.get(f'pago_{i}')
             
-            # CONVERSIÓN NECESARIA:
+            # Mejora: Conversión segura para edición manual evitando NaNs
             monto_editado = request.form.get(f'monto_{i}')
-            session['gastos_temporales'][i]['monto_registro'] = int(monto_editado) if monto_editado else 0
+            try:
+                session['gastos_temporales'][i]['monto_registro'] = float(monto_editado) if monto_editado else 0.0
+            except ValueError:
+                session['gastos_temporales'][i]['monto_registro'] = 0.0
         
         session.modified = True
-        flash("💾 Planilla actualizada correctamente.", "success")
+        flash("💾 Vista previa actualizada correctamente.", "success")
     return redirect(url_for('control_gastos'))
 #####################################################################################################
 # RUTA PARA ASIGNAR PERSONAL
@@ -1238,7 +1245,6 @@ def registro_horas():
                 flash("⚠️ Solo se pueden editar semanas dentro del año actual.", "warning")
                 return redirect(url_for('registro_horas'))
             
-            # Se cambia el -2 por -4 para permitir 4 semanas de retroactividad
             if semana_objetivo < semana_actual_dt - 4 or fecha_real_dt > hoy:
                 flash("⚠️ Solo se pueden editar la semana actual y las 4 anteriores.", "warning")
                 return redirect(url_for('registro_horas'))
@@ -1265,7 +1271,8 @@ def registro_horas():
                     observacionP = None
 
                     try:
-                        if hn_val in ['L', 'V', 'F', 'P']:
+                        # MEJORA: Se añade 'D' a la lista de estados permitidos
+                        if hn_val in ['L', 'V', 'F', 'P', 'D']:
                             horas_normales = 0
                             observacion = hn_val
                             if hn_val == 'P':
@@ -1398,7 +1405,7 @@ def registro_horas():
                            fechas_por_dia=fechas_por_dia,
                            resumen=resumen,
                            valores_guardados=valores_guardados)
-
+    
 
 ########################################################################################################
 @app.route('/adquisiciones', methods=['GET', 'POST'])
@@ -1585,6 +1592,7 @@ def descargar_excel(tabla):
 
     # Definición de formatos
     formato_cuadricula = workbook.add_format({'border': 1, 'valign': 'vcenter'})
+    # NOTA: formato_moneda se conserva por compatibilidad pero se prioriza write_number para "monto" y "precio"
     formato_moneda = workbook.add_format({'border': 1, 'num_format': '"$ "#,##0', 'align': 'right', 'valign': 'vcenter'})
     formato_fecha = workbook.add_format({'border': 1, 'num_format': 'dd-mm-yyyy', 'align': 'center', 'valign': 'vcenter'})
     formato_encabezado_tabla = workbook.add_format({'bold': True, 'border': 1, 'bg_color': '#D9D9D9', 'align': 'center', 'valign': 'vcenter'})
@@ -1596,11 +1604,11 @@ def descargar_excel(tabla):
             valor = df.iloc[r_idx, c_idx]
             nombre_columna = str(df.columns[c_idx]).lower().strip()
             
-            # Formato de Moneda para columnas específicas
-            columnas_dinero = ['monto_registro', 'costo', 'valor_neto', 'monto', 'precio_unitario']
-            if nombre_columna in columnas_dinero and valor != '':
+            # --- MEJORA APLICADA: Detectar si inicia con 'precio' o 'monto' ---
+            if (nombre_columna.startswith('precio') or nombre_columna.startswith('monto')) and valor != '':
                 try:
-                    worksheet.write(r_idx + 2, c_idx, float(valor), formato_moneda)
+                    # Se escribe como número puro sin el formato de moneda (símbolo $)
+                    worksheet.write_number(r_idx + 2, c_idx, float(valor), formato_cuadricula)
                 except:
                     worksheet.write(r_idx + 2, c_idx, valor, formato_cuadricula)
             
@@ -1639,7 +1647,7 @@ def descargar_excel(tabla):
     writer.close()
     output.seek(0)
     return send_file(output, download_name=nombre_archivo, as_attachment=True)
-
+    
 #####################################################################################################################################
 @app.route('/resultado_hh', methods=['GET', 'POST'])
 def resultado_hh():
@@ -1781,14 +1789,15 @@ def resultado_hh():
                            fecha_filtro=fecha_filtro,
                            datos=datos)
 
-
+######################################
 
 @app.route('/exportar_resultado_hh_excel', methods=['POST'])
 def exportar_resultado_hh_excel():
-    from flask import send_file, request
+    from flask import send_file, request, redirect, url_for
     import pandas as pd
     from io import BytesIO
     import datetime
+    import os
     import psycopg2.extras 
 
     centro_costo = request.form.get('centro_costo')
@@ -1799,32 +1808,26 @@ def exportar_resultado_hh_excel():
     condiciones_fecha = ""
     parametros = []
 
-    # ✅ Ignorar filtro si es "ninguno" o sin fecha
-    if tipo_filtro == 'ninguno' or not fecha_filtro:
-        tipo_filtro = None
-        fecha_filtro = None
-
-    # 🎯 Manejo de filtro por semana o mes
-    elif tipo_filtro and fecha_filtro:
+    # Manejo de filtros de fecha
+    if tipo_filtro == 'semana' and fecha_filtro:
         try:
-            if tipo_filtro == 'semana':
-                anio, semana_num = map(int, fecha_filtro.split('-W'))
-                primer_dia = datetime.date.fromisocalendar(anio, semana_num, 1)
-                ultimo_dia = primer_dia + datetime.timedelta(days=6)
-                condiciones_fecha = "AND rh.horas_fecha BETWEEN %s AND %s"
-                parametros.extend([primer_dia, ultimo_dia])
-            elif tipo_filtro == 'mes':
-                anio, mes = map(int, fecha_filtro.split('-'))
-                condiciones_fecha = "AND EXTRACT(YEAR FROM rh.horas_fecha) = %s AND EXTRACT(MONTH FROM rh.horas_fecha) = %s"
-                parametros.extend([anio, mes])
-        except ValueError:
-            pass 
+            anio, semana_num = map(int, fecha_filtro.split('-W'))
+            primer_dia = datetime.date.fromisocalendar(anio, semana_num, 1)
+            ultimo_dia = primer_dia + datetime.timedelta(days=6)
+            condiciones_fecha = "AND rh.horas_fecha BETWEEN %s AND %s"
+            parametros.extend([primer_dia, ultimo_dia])
+        except ValueError: pass
+    elif tipo_filtro == 'mes' and fecha_filtro:
+        try:
+            anio, mes = map(int, fecha_filtro.split('-'))
+            condiciones_fecha = "AND EXTRACT(YEAR FROM rh.horas_fecha) = %s AND EXTRACT(MONTH FROM rh.horas_fecha) = %s"
+            parametros.extend([anio, mes])
+        except ValueError: pass
 
     conexion = obtener_conexion()
     try:
         with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-            
-            # SELECT sin 'dias_trabajados_9hr'
+            # Query incluyendo la nueva columna 'D' para Desvinculados
             select_columns = """
                 p.nombre, p.apellido, p.rut, p.pago_hora,
                 COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) AS total_hn,
@@ -1834,48 +1837,19 @@ def exportar_resultado_hh_excel():
                 COUNT(*) FILTER (WHERE rh.observacion ILIKE 'P') AS permisos,
                 COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas,
                 COUNT(*) FILTER (WHERE rh.observacion ILIKE 'V') AS vacaciones,
-                -- Columna dias_trabajados_9hr ELIMINADA
+                COUNT(*) FILTER (WHERE rh.observacion ILIKE 'D') AS desvinculados,
                 (COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) * p.pago_hora) AS monto_a_pagar
             """
 
-            # 🧠 Filtro por ambos: centro y especialidad
             if centro_costo and especialidad:
-                query = f"""
-                    SELECT {select_columns}
-                    FROM asignacion_personal ap
-                    JOIN personal p ON ap.rut = p.rut
-                    LEFT JOIN registro_horas rh ON p.rut = rh.rut AND rh.centro_costo = ap.centro_costo
-                    WHERE ap.centro_costo = %s AND p.especialidad = %s {condiciones_fecha}
-                    GROUP BY p.nombre, p.apellido, p.rut, p.pago_hora
-                    ORDER BY p.apellido, p.nombre
-                """
+                query = f"SELECT {select_columns} FROM asignacion_personal ap JOIN personal p ON ap.rut = p.rut LEFT JOIN registro_horas rh ON p.rut = rh.rut AND rh.centro_costo = ap.centro_costo WHERE ap.centro_costo = %s AND p.especialidad = %s {condiciones_fecha} GROUP BY p.nombre, p.apellido, p.rut, p.pago_hora ORDER BY p.apellido, p.nombre"
                 cursor.execute(query, [centro_costo, especialidad] + parametros)
-
-            # Filtro solo por especialidad
-            elif especialidad and not centro_costo:
-                query = f"""
-                    SELECT {select_columns}
-                    FROM personal p
-                    LEFT JOIN registro_horas rh ON p.rut = rh.rut
-                    WHERE p.especialidad = %s {condiciones_fecha}
-                    GROUP BY p.nombre, p.apellido, p.rut, p.pago_hora
-                    ORDER BY p.apellido, p.nombre
-                """
+            elif especialidad:
+                query = f"SELECT {select_columns} FROM personal p LEFT JOIN registro_horas rh ON p.rut = rh.rut WHERE p.especialidad = %s {condiciones_fecha} GROUP BY p.nombre, p.apellido, p.rut, p.pago_hora ORDER BY p.apellido, p.nombre"
                 cursor.execute(query, [especialidad] + parametros)
-
-            # Filtro solo por centro de costo
-            elif centro_costo and not especialidad:
-                query = f"""
-                    SELECT {select_columns}
-                    FROM asignacion_personal ap
-                    JOIN personal p ON ap.rut = p.rut
-                    LEFT JOIN registro_horas rh ON p.rut = rh.rut AND rh.centro_costo = ap.centro_costo
-                    WHERE ap.centro_costo = %s {condiciones_fecha}
-                    GROUP BY p.nombre, p.apellido, p.rut, p.pago_hora
-                    ORDER BY p.apellido, p.nombre
-                """
+            elif centro_costo:
+                query = f"SELECT {select_columns} FROM asignacion_personal ap JOIN personal p ON ap.rut = p.rut LEFT JOIN registro_horas rh ON p.rut = rh.rut AND rh.centro_costo = ap.centro_costo WHERE ap.centro_costo = %s {condiciones_fecha} GROUP BY p.nombre, p.apellido, p.rut, p.pago_hora ORDER BY p.apellido, p.nombre"
                 cursor.execute(query, [centro_costo] + parametros)
-
             else:
                 return redirect(url_for('resultado_hh'))
 
@@ -1883,71 +1857,70 @@ def exportar_resultado_hh_excel():
             columnas = [desc.name for desc in cursor.description]
             
     except Exception as e:
-        print(f"Error en la exportación: {e}") 
+        print(f"Error: {e}")
         return redirect(url_for('resultado_hh'))
     finally:
-        if conexion:
-            conexion.close()
+        if conexion: conexion.close()
 
-    if not datos:
-        return redirect(url_for('resultado_hh'))
+    if not datos: return redirect(url_for('resultado_hh'))
 
-    # 📊 Exportar a Excel
     df = pd.DataFrame(datos, columns=columnas)
-    
-    # Renombrar columnas para el Excel (ACTUALIZADO: dias_trabajados_9hr eliminado)
-    df.rename(columns={
-        'nombre': 'Nombre',
-        'apellido': 'Apellido',
-        'rut': 'RUT',
-        'pago_hora': 'Pago por Hora',
-        'total_hn': 'Total Horas Normales',
-        'total_he': 'Total Horas Extras',
-        'dias_trabajados': 'Días con Horas Registradas',
-        'licencias': 'Licencias',
-        'permisos': 'Permisos',
-        'fallas': 'Fallas',
-        'vacaciones': 'Vacaciones',
-        #'dias_trabajados_9hr': 'Días Trabajados (Equiv. 9hr)', # ELIMINADO
-        'monto_a_pagar': 'Monto a Pagar (HN)'
-    }, inplace=True)
-    
-    # 📌 NUEVO: Aplicar el formato de un decimal (redondeo)
-    columnas_decimales = [
-        'Pago por Hora',
-        'Total Horas Normales',
-        'Total Horas Extras',
-        'Monto a Pagar (HN)'
-    ]
-    
-    for col in columnas_decimales:
-        if col in df.columns:
-            # Redondea el valor a 1 decimal
-            df[col] = df[col].round(1) 
+    df = df.fillna(0)
 
+    # Renombrado de columnas
+    df.rename(columns={
+        'nombre': 'Nombre', 'apellido': 'Apellido', 'rut': 'RUT', 'pago_hora': 'Pago por Hora',
+        'total_hn': 'Total Horas Normales', 'total_he': 'Total Horas Extras',
+        'dias_trabajados': 'Días con Horas Registradas', 'licencias': 'Licencias',
+        'permisos': 'Permisos', 'fallas': 'Fallas', 'vacaciones': 'Vacaciones',
+        'desvinculados': 'Desvinculados', 'monto_a_pagar': 'Monto a Pagar (HN)'
+    }, inplace=True)
+
+    # Redondeo de decimales solicitado
+    for col in ['Pago por Hora', 'Total Horas Normales', 'Total Horas Extras', 'Monto a Pagar (HN)']:
+        if col in df.columns: df[col] = df[col].round(1)
+
+    # --- DISEÑO PROFESIONAL CON XLSXWRITER ---
     output = BytesIO()
-    # Para asegurar que se exporte con el formato de número, no con el texto formateado
-    df.to_excel(output, index=False) 
+    writer = pd.ExcelWriter(output, engine='xlsxwriter')
+    df.to_excel(writer, index=False, sheet_name='Reporte', startrow=1)
+    
+    workbook  = writer.book
+    worksheet = writer.sheets['Reporte']
+
+    # Definición de formatos institucionales
+    formato_cuadricula = workbook.add_format({'border': 1, 'valign': 'vcenter'})
+    formato_encabezado = workbook.add_format({'bold': True, 'border': 1, 'bg_color': '#D9D9D9', 'align': 'center'})
+    formato_titulo = workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center', 'font_color': '#D45D00'})
+
+    # Aplicar cuadriculado y formatos a los datos
+    for r_idx in range(len(df)):
+        for c_idx in range(len(df.columns)):
+            worksheet.write(r_idx + 2, c_idx, df.iloc[r_idx, c_idx], formato_cuadricula)
+
+    # Encabezados con formato gris
+    for c_idx, col_name in enumerate(df.columns):
+        worksheet.write(1, c_idx, col_name, formato_encabezado)
+
+    # Insertar Logo JCM
+    ruta_logo = os.path.join(app.root_path, 'static', 'logo.png')
+    if os.path.exists(ruta_logo):
+        worksheet.insert_image('A1', ruta_logo, {'x_scale': 0.35, 'y_scale': 0.35, 'x_offset': 5, 'y_offset': 0})
+
+    # Título representativo centrado
+    titulo_texto = f"REPORTE RESULTADOS HH - {centro_costo if centro_costo else 'GENERAL'}"
+    worksheet.merge_range(0, 1, 0, len(df.columns) - 1, titulo_texto, formato_titulo)
+
+    # Ajuste de dimensiones
+    worksheet.set_row(0, 30) 
+    for i, col in enumerate(df.columns):
+        worksheet.set_column(i, i, max(len(col), 12) + 2)
+
+    writer.close()
     output.seek(0)
 
-    # 📁 Nombre del archivo
-    nombre_archivo = "resultado_hh"
-    if centro_costo:
-        nombre_archivo += f"_{centro_costo.replace(' ', '_')}"
-    if especialidad:
-        nombre_archivo += f"_{especialidad.replace(' ', '_')}"
-    if tipo_filtro and fecha_filtro:
-        if tipo_filtro == 'semana':
-            nombre_archivo += f"_semana_{fecha_filtro}"
-        elif tipo_filtro == 'mes':
-            nombre_archivo += f"_mes_{fecha_filtro}"
-
-    nombre_archivo += ".xlsx"
-
-    return send_file(output,
-                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                     download_name=nombre_archivo,
-                     as_attachment=True)
+    nombre_archivo = f"Resultado_HH_{datetime.date.today()}.xlsx"
+    return send_file(output, download_name=nombre_archivo, as_attachment=True)
 
 ######################################################################################################333
 

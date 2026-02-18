@@ -69,6 +69,7 @@
                     <th title="Permisos">P</th>
                     <th title="Licencias">L</th>
                     <th title="Fallas">F</th>
+                    <th title="Desvinculados" style="background-color: #fce4ec;">D</th>
                 </tr>
             </thead>
             <tbody>
@@ -80,8 +81,7 @@
                 {% set tot_P = 0 %}
                 {% set tot_F = 0 %}
                 {% set tot_V = 0 %}
-
-                {% for persona in datos %}
+                {% set tot_D = 0 %} {% for persona in datos %}
                 <tr>
                     <td class="col-identidad">{{ loop.index }}</td>
                     <td class="col-identidad" style="text-align: left;">{{ persona.nombre or '' }} {{ persona.apellido or '' }}</td>
@@ -95,6 +95,7 @@
                     <td>{{ persona.permisos or 0 }}</td>
                     <td>{{ persona.licencias or 0 }}</td>
                     <td>{{ persona.fallas or 0 }}</td>
+                    <td style="background-color: #fff1f0;">{{ persona.desvinculados or 0 }}</td>
                 </tr>
                 {% set tot_hn = tot_hn + (persona.total_hn or 0) %}
                 {% set tot_he = tot_he + (persona.total_he or 0) %}
@@ -104,7 +105,7 @@
                 {% set tot_P = tot_P + (persona.permisos or 0) %}
                 {% set tot_F = tot_F + (persona.fallas or 0) %}
                 {% set tot_V = tot_V + (persona.vacaciones or 0) %}
-                {% endfor %}
+                {% set tot_D = tot_D + (persona.desvinculados or 0) %} {% endfor %}
             </tbody>
             <tfoot>
                 <tr>
@@ -118,6 +119,7 @@
                     <th>{{ tot_P }}</th>
                     <th>{{ tot_L }}</th>
                     <th>{{ tot_F }}</th>
+                    <th style="background-color: #f8d7da;">{{ tot_D }}</th>
                 </tr>
             </tfoot>
         </table>
@@ -134,7 +136,6 @@
 {% endif %}
 
 <style>
-    /* Estilos de botones, tabla y clases de resaltado (Manteniendo tu CSS original) */
     .btn-primary { background-color: #007bff; color: white; padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; }
     .btn-success { background-color: #28a745; color: white; padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; }
     .filter-select, .filter-input { width: 250px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }

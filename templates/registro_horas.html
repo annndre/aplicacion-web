@@ -5,12 +5,10 @@
 {% block content %}
 <h2>Registro de Horas</h2>
 
-<!-- MENSAJE DE EDICIÓN PERMITIDA -->
 <div class="alert alert-info mt-3" role="alert">
   Se pueden editar los días de la semana actual y las 2 anteriores. Solo un día a la vez.
 </div>
 
-<!-- BLOQUE DE MENSAJES FLASH -->
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
     {% for category, message in messages %}
@@ -46,7 +44,6 @@
     }
 </style>
 
-<!-- EXPORTACIÓN EXCEL -->
 <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
     <form method="GET" action="{{ url_for('descargar_excel', tabla='registro_horas') }}" style="display: flex; gap: 10px; align-items: center;">
         <label for="centro_costo_export" style="margin-bottom: 0;">Exportar HH:</label>
@@ -60,7 +57,6 @@
     </form>
 </div>
 
-<!-- FORMULARIO DE SELECCIÓN -->
 <form method="POST" class="form-section">
     <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
         <div>
@@ -80,7 +76,6 @@
     </div>
 </form>
 
-<!-- FORMULARIO DE REGISTRO DE HORAS -->
 {% if trabajadores %}
 <form method="POST">
     <input type="hidden" name="centro_costo" value="{{ centro_costo }}">
@@ -118,11 +113,11 @@
                             <input type="text"
                                 name="hn_{{ rut }}_{{ dia_key }}"
                                 id="hn_{{ rut }}_{{ dia_key }}"
-                                pattern="^([0-9]{1,2}([.,][0-9])?|[lLvVfFpP])?$"
-                                title="Ej: 8, 7.5, 7,5 o L/V/F/P"
-                                placeholder="HN o L/V/F/P"
+                                pattern="^([0-9]{1,2}([.,][0-9])?|[lLvVfFpP dD])?$"
+                                title="Ej: 8, 7.5, 7,5 o L/V/F/P/D"
+                                placeholder="HN o L/V/F/P/D"
                                 class="form-control mb-1 hn_{{ dia_key }} {% if datos %}bloqueado{% endif %}"
-                                value="{% if datos.observacion in ['L', 'P', 'F', 'V'] %}{{ datos.observacion }}{% elif datos.hn is not none %}{{ datos.hn }}{% endif %}"
+                                value="{% if datos.observacion in ['L', 'P', 'F', 'V', 'D'] %}{{ datos.observacion }}{% elif datos.hn is not none %}{{ datos.hn }}{% endif %}"
                                 oninput="mostrarCamposPermiso(this.value, '{{ rut }}', '{{ dia_key }}')"
                                 {% if datos %}readonly{% endif %}>
 
@@ -172,7 +167,6 @@
 </form>
 {% endif %}
 
-<!-- RESUMEN DE HORAS -->
 {% if centro_costo and resumen %}
 <div class="card mt-4 p-3 border-info" style="background-color: #f0f8ff;">
     <h5>📊 Resumen del Centro de Costo: {{ centro_costo }}</h5>
@@ -185,7 +179,6 @@
 </div>
 {% endif %}
 
-<!-- SCRIPT FINAL -->
 <script>
 function rellenarDia(dia, valor) {
     document.querySelectorAll('.hn_' + dia).forEach(input => {
