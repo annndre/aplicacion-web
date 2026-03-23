@@ -1,0 +1,235 @@
+{% extends 'base.html' %}
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<h2 style="text-align: center; color: #333; margin-bottom: 20px;">📊 Dashboard de Gestión Operativa - JCM</h2>
+
+<div class="dashboard-header">
+    {% if rol == 'admin' %}
+    <form method="GET" class="filter-bar">
+        <div class="filter-item flex-grow">
+            <select name="centro_costo" style="width: 100%;">
+                <option value="">-- Todos los Centros --</option>
+                {% for c in centros %}
+                <option value="{{ c }}" {% if c == centro_sel %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="filter-item">
+            <label>Desde:</label>
+            <input type="date" name="fecha_desde" value="{{ fecha_desde }}">
+        </div>
+
+        <div class="filter-item">
+            <label>Hasta:</label>
+            <input type="date" name="fecha_hasta" value="{{ fecha_hasta }}">
+        </div>
+
+        <button type="submit" class="btn-filtrar">Filtrar</button>
+    </form>
+    {% endif %}
+</div>
+
+{% if rol == 'admin' %}
+<div class="kpi-container">
+    <div class="kpi-card">
+        <h3>Gastos Totales</h3>
+        <p class="valor-kpi">$ {{ "{:,.0f}".format(gastos_cat|sum(attribute='total')) if gastos_cat else '0' }}</p>
+    </div>
+
+    <div class="kpi-card">
+        <h3>Estado de Elementos</h3>
+        <div class="status-split">
+            <div class="status-column">
+                <span class="status-subtitle">Operativos</span>
+                <span class="status-value">{{ estados.op }} un</span>
+            </div>
+            
+            <div class="status-divider"></div>
+            
+            <div class="status-column">
+                <span class="status-subtitle">Deficientes</span>
+                <span class="status-value">{{ estados.def }} un</span>
+            </div>
+            
+            <div class="status-divider"></div>
+            
+            <div class="status-column">
+                <span class="status-subtitle">No Operativos</span>
+                <span class="status-value">{{ estados.no_op }} un</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="kpi-card border-accent">
+        <h3>Alertas Stock</h3>
+        <p class="valor-kpi">12</p>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <div class="chart-card">
+        <h4>Distribución de Gastos por Categoría</h4>
+        <div class="canvas-container-bar">
+            <canvas id="barChart"></canvas>
+        </div>
+    </div>
+
+    <div class="chart-card">
+        <h4>Estado de Stock: Top 5 Categorías</h4>
+        <div class="canvas-container-pie">
+            <canvas id="inventoryChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-grid" style="grid-template-columns: 1fr; margin-top: 25px;">
+    <div class="chart-card">
+        <h4>Monto Estimado de Productos Consumidos</h4>
+        <div style="height: 450px; position: relative;">
+            <canvas id="horizontalBarChart"></canvas>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<style>
+    /* DISEÑO DE FILTROS CORREGIDO */
+    .filter-bar { 
+        display: flex; 
+        align-items: center; 
+        justify-content: space-between; 
+        background: white; 
+        padding: 15px 25px; 
+        border-radius: 12px; 
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05); 
+        margin-bottom: 30px; 
+        gap: 20px; 
+    }
+    
+    .filter-item { 
+        display: flex; 
+        align-items: center; 
+        gap: 10px; 
+    }
+    
+    /* El selector ahora crece proporcionalmente más que el resto */
+    .flex-grow { 
+        flex: 2; 
+    }
+    
+    .filter-item label { 
+        font-weight: bold; 
+        color: #555; 
+        font-size: 0.9em; 
+        white-space: nowrap; 
+    }
+    
+    .filter-item select, .filter-item input { 
+        padding: 8px; 
+        border: 1px solid #ccc; 
+        border-radius: 5px; 
+    }
+
+    /* Ajuste para que el botón no se expanda horizontalmente */
+    .btn-filtrar {
+        background-color: #D45D00 !important; 
+        color: white !important;
+        border: none; 
+        padding: 10px 25px; 
+        border-radius: 6px;
+        font-weight: bold; 
+        cursor: pointer;
+        flex-shrink: 0; 
+        width: auto !important; 
+    }
+
+    /* Resto de estilos KPI y Gráficos */
+    .kpi-container { display: flex; gap: 20px; margin-bottom: 25px; }
+    .kpi-card { flex: 1; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); text-align: center; }
+    .valor-kpi { font-size: 1.8rem; font-weight: bold; color: #D45D00; margin: 5px 0 0 0; }
+    
+    .status-split { display: flex; justify-content: space-around; align-items: center; margin-top: 10px; }
+    .status-column { display: flex; flex-direction: column; align-items: center; flex: 1; }
+    .status-subtitle { font-size: 0.75rem; color: #888888; text-transform: uppercase; font-weight: bold; margin-bottom: 5px; }
+    .status-value { font-size: 1.2rem; font-weight: 900; color: #000000; }
+    .status-divider { width: 1.5px; height: 35px; background-color: #000000; margin: 0 10px; }
+    .border-accent { border-right: 5px solid #D45D00; }
+
+    .dashboard-grid { display: grid; grid-template-columns: 1.4fr 0.6fr; gap: 20px; margin-top: 20px; }
+    .chart-card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+    .canvas-container-bar { height: 300px; position: relative; }
+    .canvas-container-pie { height: 250px; position: relative; }
+
+    @media (max-width: 992px) {
+        .filter-bar { flex-direction: column; align-items: stretch; }
+        .dashboard-grid { grid-template-columns: 1fr !important; }
+    }
+</style>
+
+<script>
+    {% if rol == 'admin' %}
+    // 1. Gráfico Vertical: Gastos por Categoría
+    new Chart(document.getElementById('barChart'), {
+        type: 'bar',
+        data: {
+            labels: [{% for g in gastos_cat %}"{{ g.categoria }}",{% endfor %}],
+            datasets: [{
+                label: 'Monto $',
+                data: [{% for g in gastos_cat %}{{ g.total }},{% endfor %}],
+                backgroundColor: '#3498db',
+                borderRadius: 5
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+
+    // 2. Gráfico Circular: Stock por Categoría
+    new Chart(document.getElementById('inventoryChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['EPP', 'INSUMO', 'HERR. MANUAL', 'OFICINA', 'HERR. ELÉCTRICA'],
+            datasets: [{
+                data: [300, 150, 100, 80, 50],
+                backgroundColor: ['#D45D00', '#3498db', '#2ecc71', '#9b59b6', '#34495e']
+            }]
+        },
+        options: { cutout: '65%', responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }
+    });
+
+    // 3. Gráfico Horizontal Dinámico con persistencia de datos
+    const datosConsumo = {{ consumos_centro | tojson | safe if consumos_centro else '[]' }};
+    
+    new Chart(document.getElementById('horizontalBarChart'), {
+        type: 'bar',
+        data: {
+            labels: datosConsumo.map(item => item.producto_nombre), 
+            datasets: [{
+                label: 'Monto Consumido $',
+                data: datosConsumo.map(item => item.total),
+                backgroundColor: '#D45D00',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            indexAxis: 'y', 
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) { return 'Total: $' + context.raw.toLocaleString(); }
+                    }
+                }
+            },
+            scales: {
+                x: { beginAtZero: true, ticks: { callback: function(value) { return '$' + value.toLocaleString(); } } },
+                y: { ticks: { autoSkip: false, font: { size: 10 }, color: '#333' } }
+            }
+        }
+    });
+    {% endif %}
+</script>
+{% endblock %}

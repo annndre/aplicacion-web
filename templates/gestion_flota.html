@@ -1,0 +1,286 @@
+{% extends 'base.html' %}
+{% block title %}JCM - Gestión de Flota{% endblock %}
+
+{% block content %}
+<link href='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css' rel='stylesheet' />
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/es.js'></script>
+
+<div class="dashboard-header">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }}" style="
+                padding: 15px; 
+                margin-bottom: 20px; 
+                border: 1px solid transparent; 
+                border-radius: 4px;
+                color: {% if category == 'danger' %}#a94442{% else %}#3c763d{% endif %};
+                background-color: {% if category == 'danger' %}#f2dede{% else %}#dff0d8{% endif %};
+                border-color: {% if category == 'danger' %}#ebccd1{% else %}#d6e9c6{% endif %};">
+                {{ message }}
+            </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <h2>🚚 Centro de Control de Flota JCM</h2>
+    <p>Gestión de activos, reservas y auditoría de uso.</p>
+</div>
+
+<div class="fleet-grid">
+    <div class="fleet-card form-section">
+        <div class="card-header-icon">
+            <span style="font-size: 1.5rem;">📋</span>
+            <h3>Nueva Solicitud / Bloqueo</h3>
+        </div>
+        
+        <form action="{{ url_for('solicitar_vehiculo') }}" method="POST" id="form-flota">
+            <div class="input-group">
+                <label for="vehiculo_id"><i class="fas fa-car"></i> Vehículo (Patente - Marca):</label>
+                <select name="vehiculo_id" id="vehiculo_id" required class="form-control">
+                    <option value="">-- Seleccionar Activo --</option>
+                    {% for v in vehiculos %}
+                    <option value="{{ v.id }}">
+                        [{{ v.patente }}] {{ v.marca }} - {{ v.modelo }} 
+                        {% if v.estado_actual != 'DISPONIBLE' %}(En Uso){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="input-group" style="background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px dashed #ccc;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin: 0;">
+                    <input type="checkbox" id="reserva_por_hora" name="reserva_por_hora" style="width: 18px; height: 18px;"> 
+                    <span style="font-weight: bold; font-size: 0.9rem;">🕒 Definir horario específico (horas/minutos)</span>
+                </label>
+            </div>
+
+            <div class="date-group">
+                <div class="date-field">
+                    <label for="f_inicio">Inicio:</label>
+                    <input type="date" name="fecha_inicio" required id="f_inicio" class="form-control">
+                </div>
+                <div class="date-field">
+                    <label for="f_fin">Fin:</label>
+                    <input type="date" name="fecha_fin" required id="f_fin" class="form-control">
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label for="tipo_evento">Propósito del Uso:</label>
+                <select name="tipo_evento" id="tipo_evento" required class="form-control">
+                    <option value="VISITA TERRENO">🚜 Visita a Terreno (Operativo)</option>
+                    {% if session.get('rol') in ['admin', 'jefeB', 'jefeT', 'supervisor'] %}
+                    <option value="MANTENCION">🔧 Mantención Preventiva (Bloqueo)</option>
+                    <option value="REPARACION">⚠️ Reparación Correctiva</option>
+                    <option value="COMPRAS">🛍️ Compras</option>
+                    {% endif %}
+                </select>
+            </div>
+
+            <div class="form-footer">
+                <button type="submit" class="btn-confirm">
+                    <i class="fas fa-check-circle"></i> Confirmar Registro
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="fleet-card calendar-section">
+        <div class="card-header-icon">
+            <span style="font-size: 1.5rem;">📅</span>
+            <h3>Cronograma de Uso de Flota</h3>
+        </div>
+        <div id='calendar'></div>
+    </div>
+</div>
+
+<div class="fleet-card table-section" style="margin-top: 25px;">
+    <h3>🚐 Estado de Flota y Responsables Actuales</h3>
+    <table class="fleet-table">
+        <thead>
+            <tr>
+                <th>Patente</th>
+                <th>Marca/Modelo</th>
+                <th>Estado Actual</th>
+                <th>Persona a Cargo</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for v in vehiculos %}
+            <tr>
+                <td><strong>{{ v.patente }}</strong></td>
+                <td>{{ v.marca }} {{ v.modelo }}</td>
+                <td>
+                    <span class="badge badge-{{ v.estado_actual.replace(' ', '_').lower() if v.estado_actual else 'desconocido' }}">
+                        {{ v.estado_actual or 'S/I' }}
+                    </span>
+                </td>
+                <td>{{ v.nombre_responsable_amigable or 'Sin asignar' }}</td>
+                <td>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        {% if session.get('rol') in ['admin', 'jefeB', 'jefeT'] %}
+                            <button class="btn-sm" style="background: #004085; color: white; border: none; cursor: pointer;" 
+                                    onclick="abrirAuditoria('{{ v.id }}', '{{ v.patente }}')">
+                                <i class="fas fa-search"></i> Inspeccionar
+                            </button>
+                        {% else %}
+                            <a href="{{ url_for('inspeccion_vehiculo') }}" class="btn-sm" style="background: #27ae60; text-decoration: none;">
+                                <i class="fas fa-clipboard-check"></i> Inspeccionar
+                            </a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div id="modalAuditoria" class="custom-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>🔍 Auditoría de Vehículo: <span id="modalPatente"></span></h3>
+            <span class="close-btn" onclick="cerrarModal()">&times;</span>
+        </div>
+        <div class="modal-filters">
+            <div class="filter-group">
+                <label>Desde:</label>
+                <input type="date" id="filtroDesde" class="form-control">
+            </div>
+            <div class="filter-group">
+                <label>Hasta:</label>
+                <input type="date" id="filtroHasta" class="form-control">
+            </div>
+            <button class="btn-confirm" style="width: auto; padding: 0 20px;" onclick="cargarDatosAuditoria()">Filtrar</button>
+        </div>
+        <div class="modal-body" style="overflow-x: auto;">
+            <table class="fleet-table" id="tablaAuditoria">
+                <thead>
+                    <tr>
+                        <th>Nombre</th><th>Apellido</th><th>RUT</th><th>Fecha</th><th>Periodo</th><th>Motivo</th><th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody id="bodyAuditoria"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+    .custom-modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+    .modal-content { background-color: white; margin: 5% auto; padding: 20px; border-radius: 10px; width: 85%; max-width: 1000px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f4f4f4; padding-bottom: 10px; }
+    .modal-filters { display: flex; gap: 15px; background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0; align-items: flex-end; }
+    .filter-group { flex: 1; }
+    .close-btn { font-size: 28px; cursor: pointer; color: #666; }
+    .fleet-grid { display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
+    .fleet-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .date-group { display: flex; gap: 10px; }
+    .date-group div { flex: 1; }
+    #calendar { height: 500px; font-size: 0.9em; }
+    .fleet-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    .fleet-table th, .fleet-table td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; font-size: 0.85rem; }
+    .badge { padding: 5px 10px; border-radius: 20px; font-size: 0.8em; font-weight: bold; }
+    .btn-confirm { background-color: #D45D00; color: white; border: none; padding: 12px; width: 100%; border-radius: 5px; cursor: pointer; font-weight: bold; }
+    .btn-sm { padding: 5px 10px; border-radius: 3px; font-size: 0.85em; text-decoration: none; display: inline-block; }
+    @media (max-width: 1024px) { .fleet-grid { grid-template-columns: 1fr; } }
+</style>
+
+<script>
+    // Lógica para cambiar entre Solo Fecha y Fecha con Horario
+    const checkboxHora = document.getElementById('reserva_por_hora');
+    const inputInicio = document.getElementById('f_inicio');
+    const inputFin = document.getElementById('f_fin');
+
+    checkboxHora.addEventListener('change', function() {
+        if (this.checked) {
+            inputInicio.type = 'datetime-local';
+            inputFin.type = 'datetime-local';
+        } else {
+            inputInicio.type = 'date';
+            inputFin.type = 'date';
+        }
+    });
+
+    let vehiculoSeleccionado = null;
+    function abrirAuditoria(id, patente) {
+        vehiculoSeleccionado = id;
+        document.getElementById('modalPatente').innerText = patente;
+        document.getElementById('modalAuditoria').style.display = 'block';
+        cargarDatosAuditoria();
+    }
+    function cerrarModal() { document.getElementById('modalAuditoria').style.display = 'none'; }
+
+    async function cargarDatosAuditoria() {
+        const desde = document.getElementById('filtroDesde').value;
+        const hasta = document.getElementById('filtroHasta').value;
+        const body = document.getElementById('bodyAuditoria');
+        body.innerHTML = '<tr><td colspan="7" style="text-align:center;">Cargando...</td></tr>';
+        try {
+            const url = `/api/auditoria_vehiculo/${vehiculoSeleccionado}?desde=${desde}&hasta=${hasta}`;
+            const response = await fetch(url);
+            const datos = await response.json();
+            body.innerHTML = '';
+            if (datos.length === 0) {
+                body.innerHTML = '<tr><td colspan="7" style="text-align:center;">Sin registros.</td></tr>';
+                return;
+            }
+            datos.forEach(item => {
+                body.innerHTML += `<tr>
+                    <td>${item.nombre}</td><td>${item.apellido}</td><td><small>${item.rut}</small></td>
+                    <td>${item.fecha_solicitud}</td><td>${item.periodo}</td><td><strong>${item.motivo}</strong></td>
+                    <td><span class="badge" style="background:#f0f0f0;">${item.estado_final}</span><br><small>${item.detalle}</small></td>
+                </tr>`;
+            });
+        } catch (error) { body.innerHTML = '<tr><td colspan="7">Error de carga.</td></tr>'; }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var calendarEl = document.getElementById('calendar');
+        var calendar = new FullCalendar.Calendar(calendarEl, {
+            locale: 'es',
+            initialView: 'dayGridMonth',
+            headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
+            events: [
+                {% for r in reservas %}
+                {
+                    id: "{{ r.id }}", 
+                    title: "{{ r.tipo_evento }}: {{ r.patente }}",
+                    start: "{{ r.fecha_inicio }}",
+                    end: "{{ r.fecha_fin }}",
+                    extendedProps: { patente: "{{ r.patente }}" },
+                    className: "fc-event-{{ r.tipo_evento|lower }}"
+                }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            ],
+            eventClick: function(info) {
+                if (confirm(`¿Anular reserva de ${info.event.extendedProps.patente}?`)) {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = `/anular_reserva/${info.event.id}`;
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            }
+        });
+        calendar.render();
+
+        const hoy = new Date().toISOString().split('T')[0];
+        inputInicio.min = hoy;
+        inputFin.min = hoy;
+
+        // Autocierre de alertas después de 5 segundos
+        setTimeout(function() {
+            let alerts = document.querySelectorAll('.alert');
+            alerts.forEach(a => {
+                a.style.transition = "opacity 0.5s ease";
+                a.style.opacity = "0";
+                setTimeout(() => a.remove(), 500);
+            });
+        }, 5000);
+    });
+</script>
+{% endblock %}

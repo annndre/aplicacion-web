@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}JCM - Inspección de Vehículo{% endblock %}
+
+{% block content %}
+<div class="inspection-container">
+    <div class="form-header">
+        <h2>📋 Inspección Universal de Flota</h2>
+        <p>Complete el estado actual del activo antes de iniciar la ruta.</p>
+    </div>
+
+    <form action="{{ url_for('inspeccion_vehiculo') }}" method="POST" class="styled-form">
+        <div class="form-group">
+            <label for="vehiculo_id">Vehículo a Inspeccionar:</label>
+            <select name="vehiculo_id" id="vehiculo_id" required>
+                <option value="">-- Seleccione Patente/Equipo --</option>
+                {% for v in vehiculos %}
+                    <option value="{{ v.id }}">[{{ v.patente }}] {{ v.marca }} {{ v.modelo }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="kilometraje">Kilometraje / Horas Motor:</label>
+                <input type="number" name="kilometraje" id="kilometraje" placeholder="Ej: 125000" required>
+            </div>
+
+            <div class="form-group">
+                <label for="estado_vehiculo">Estado de Luces y Balizas:</label>
+                <select name="estado_vehiculo" id="estado_vehiculo" required>
+                    <option value="BUENO">✅ Todo Operativo</option>
+                    <option value="DEFECTUOSO">⚠️ Requiere Revisión</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="observaciones">Observaciones Técnicas (Niveles, Neumáticos, etc.):</label>
+            <textarea name="observaciones" id="observaciones" rows="4" placeholder="Indique cualquier anomalía observada..."></textarea>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn-submit">Finalizar y Registrar</button>
+            <a href="{{ url_for('ver_inventario') }}" class="btn-cancel">Cancelar</a>
+        </div>
+    </form>
+</div>
+
+<style>
+    .inspection-container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .form-header { text-align: center; margin-bottom: 25px; }
+    .form-header h2 { color: #333; border-bottom: 2px solid #D45D00; display: inline-block; padding-bottom: 5px; }
+    
+    .styled-form { background: #f9f9f9; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .form-group { margin-bottom: 15px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    
+    label { font-weight: bold; color: #444; display: block; margin-bottom: 5px; }
+    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-size: 16px; }
+    
+    .form-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .btn-submit { background-color: #D45D00; color: white; border: none; padding: 12px; flex: 2; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 16px; }
+    .btn-submit:hover { background-color: #ff8d42; }
+    .btn-cancel { background-color: #666; color: white; text-decoration: none; padding: 12px; flex: 1; border-radius: 5px; text-align: center; font-weight: bold; font-size: 16px; }
+
+    @media (max-width: 480px) {
+        .form-grid { grid-template-columns: 1fr; }
+        .inspection-container { padding: 10px; }
+    }
+</style>
+{% endblock %}
