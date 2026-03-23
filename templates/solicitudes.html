@@ -79,6 +79,12 @@
   </div>
 
   <div class="lista-solicitudes">
+    <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center; background-color: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
+    <span style="font-weight: bold; color: #555;">📊 Reportes:</span>
+    <a href="{{ url_for('descargar_excel', tabla='solicitudes') }}" class="btn-success" style="text-decoration: none; padding: 10px 20px; font-size: 0.9em;">
+        📥 Descargar Historial de Solicitudes (Excel)
+    </a>
+</div>
     <h3>📋 Productos Agregados</h3>
     <ul class="productos-lista">
       {% for item in datos.get('productos', []) %}

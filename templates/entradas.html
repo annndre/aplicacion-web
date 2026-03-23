@@ -98,6 +98,9 @@
     </div>
 
     <div class="lista-solicitudes">
+        <a href="{{ url_for('descargar_excel', tabla='entradas') }}" class="btn-excel-jcm">
+        📖 Descargar Excel
+        </a>
         <h3>📋 Productos a Ingresar</h3>
         <ul class="productos-lista">
             {% for item in productos_temporales %}

@@ -3,25 +3,76 @@
 {% block title %}Iniciar Sesión - Sistema de Control{% endblock %}
 
 {% block content %}
-<h2>Iniciar Sesión</h2>
+<div class="login-header">
+    <h2>🔐 Iniciar Sesión</h2>
+    <p>Sistema de Gestión JCM</p>
+</div>
 
 <form method="POST">
-    <label>Usuario:</label>
-    <input type="text" name="usuario" required>
+    <div class="form-group">
+        <label>Usuario:</label>
+        <input type="text" name="usuario" required placeholder="Ingrese su usuario" autocomplete="username">
+    </div>
 
-    <label>Contraseña:</label>
-    <input type="password" name="password" required>
+    <div class="form-group">
+        <label>Contraseña:</label>
+        <input type="password" name="password" required placeholder="••••••••" autocomplete="current-password">
+    </div>
 
-    <button type="submit">Ingresar</button>
+    <button type="submit" class="btn-login">Ingresar al Sistema</button>
 </form>
 
 {% with messages = get_flashed_messages() %}
     {% if messages %}
-        <ul>
+        <ul class="flashes-login">
         {% for message in messages %}
             <li class="alert">{{ message }}</li>
         {% endfor %}
         </ul>
     {% endif %}
 {% endwith %}
+
+<style>
+    /* Solo dejamos los estilos cosméticos que no afectan el layout (márgenes/anchos) */
+    .login-header {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    .login-header h2 {
+        margin: 0;
+        color: #333;
+        border-bottom: none; /* Evita la línea doble si la base ya tiene una */
+    }
+
+    .login-header p {
+        color: #666;
+        font-size: 0.9rem;
+        margin-top: 5px;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+        text-align: left;
+    }
+
+    /* El botón conserva tu color naranja corporativo */
+    .btn-login {
+        background-color: #D45D00 !important;
+        color: white;
+        font-weight: bold;
+        transition: background 0.3s;
+        cursor: pointer;
+    }
+
+    .btn-login:hover {
+        background-color: #b34e00 !important;
+    }
+
+    .flashes-login {
+        padding: 0;
+        list-style: none;
+        margin-top: 15px;
+    }
+</style>
 {% endblock %}

@@ -10,15 +10,12 @@ from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 load_dotenv()
 
-
-
 app = Flask(__name__)
 app.secret_key = 'super_secret_key'
 app.config['UPLOAD_FOLDER'] = 'uploads'
 
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
-
 
 # ======================== CONEXIÓN POSTGRESQL ========================
 def obtener_conexion():
@@ -35,66 +32,80 @@ def obtener_conexion():
 
 # Definir usuarios y sus contraseñas
 usuarios = {
-    "Cesar": {"password": "ADMINJCM", "rol": "admin"},
-    "Gonzalo": {"password": "ADMINJCM", "rol": "admin"},
-    "Javier": {"password": "ADMINJCM", "rol": "admin"},
-    "andrea": {"password": "ADMINJCM", "rol": "admin"},
-    "Mauricio": {"password": "MAURICIOJCM", "rol": "jefeB"},
-    "Mariela": {"password": "MARIELAJCM", "rol": "bodega"},
+    "Cesar": {"password": "ADMINJCM", "rol": "admin", "rut": "16831221-0", "nombre": "Cesar", "apellido": "Hidalgo"},
+    "Gonzalo": {"password": "ADMINJCM", "rol": "admin", "rut": "10383484-8", "nombre": "Gonzalo", "apellido": "Solis"},
+    "Javier": {"password": "ADMINJCM", "rol": "admin", "rut": "15922965-3", "nombre": "Javier", "apellido": "Mundaca"},
+    "andrea": {"password": "ADMINJCM", "rol": "admin", "rut": "20488630-k", "nombre": "Andrea", "apellido": "Cid"},
+    "Mauricio": {"password": "MAURICIOJCM", "rol": "jefeB", "rut": "16156850-3", "nombre": "Mauricio", "apellido": "Matamala"},
+    "Mariela": {"password": "MARIELAJCM", "rol": "bodega", "rut": "19745977-8", "nombre": "Mariela", "apellido": "MCManus"},
     "bodega": {"password": "bodega", "rol": "bodega"},
     "admin": {"password": "1234", "rol": "admin"},
-    "Nicolas": {"password": "NICOLASJCM", "rol": "bodega"},
-    "J.FUENTES": {"password": "J.FUENTESJCM", "rol": "jefeT"},
-    "J.HENRIQUEZ": {"password": "J.HENRIQUEZJCM", "rol": "jefeT"},
-    "O.DIAZ": {"password": "O.DIAZJCM", "rol": "jefeT"},
-    "S.VILLAR": {"password": "S.VILLARJCM", "rol": "jefeT"},
+    "Nicolas": {"password": "NICOLASJCM", "rol": "bodega", "rut": "19009768-4", "nombre": "Nicolas", "apellido": "Diaz"},
+    "J.FUENTES": {"password": "J.FUENTESJCM", "rol": "jefeT", "rut": "15567862-3", "nombre": "Jonathan", "apellido": "Fuentes"},
+    "J.HENRIQUEZ": {"password": "J.HENRIQUEZJCM", "rol": "jefeT", "rut": "16836181-5", "nombre": "Jorge", "apellido": "Henriquez"},
+    "O.DIAZ": {"password": "O.DIAZJCM", "rol": "jefeT", "rut": "16455428-7", "nombre": "Oscar", "apellido": "Diaz"},
+    "S.VILLAR": {"password": "S.VILLARJCM", "rol": "jefeT", "rut": "11745422-3", "nombre": "Sergio", "apellido": "Villar"},
     "jefe terreno": {"password": "JEFETERRENOJCM", "rol": "jefeT"},
-    "S.VILLAR2": {"password": "S.VILLAR2", "rol": "jefeT"},
-    "Juan": {"password": "ADMINJCM", "rol": "admin"},
+    "S.VILLAR2": {"password": "S.VILLAR2", "rol": "jefeT", "rut": "20885308-2", "nombre": "Sergio", "apellido": "Villar"},
+    "Juan": {"password": "ADMINJCM", "rol": "admin", "rut": "21018054-0", "nombre": "Juan", "apellido": "Anticoi"},
+    "R.VILLAGRA": {"password": "R.VILLAGRAJCM", "rol": "supervisor", "rut": "11955538-8", "nombre": "Rafael", "apellido": "Villagra"},
+    "R.VERGARA": {"password": "R.VERGARAJCM", "rol": "supervisor", "rut": "11457999-8", "nombre": "Reynaldo", "apellido": "Vergara"},
+    "J.NORAMBUENA": {"password": "J.NORAMBUENAJCM", "rol": "supervisor", "rut": "19575396-2", "nombre": "Jaime", "apellido": "Norambuena"},
+    "M.PENA": {"password": "M.PENAJCM", "rol": "conductor", "rut": "19386784-7", "nombre": "Matias", "apellido": "Peña"},
+    "F.CANCINO": {"password": "F.CANCINOJCM", "rol": "conductor", "rut": "17147358-6", "nombre": "Francisco", "apellido": "Cancino"},
+    "F.OLIVOS": {"password": "F.OLIVOSJCM", "rol": "conductor", "rut": "7373331-6", "nombre": "Fernando", "apellido": "Olivos"},
 
 }
+
+# Funciones Auxiliares
+def obtener_datos_por_rut(rut_buscado):
+    """
+    Busca en el diccionario global el nombre amigable asociado al RUT.
+    Devuelve un nombre y un apellido distintivo.
+    """
+    for login_user, datos in usuarios.items():
+        if datos.get('rut') == rut_buscado:
+            return datos.get('nombre', login_user), datos.get('apellido', '')
+    
+    return "Usuario", "No Mapeado"
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         user = request.form['usuario']
         password = request.form['password']
-        print("🔍 Usuario ingresado:", user)
-        print("🔍 Contraseña ingresada:", password)
-
-
         conexion = obtener_conexion()
-
-        # 🔐 Validación de conexión
         if conexion is None:
-            flash('❌ No se pudo conectar a la base de datos. Revisa tu configuración.', 'danger')
+            flash('❌ Error de conexión con la base de datos.', 'danger')
             return redirect(url_for('login'))
 
-        with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-            cursor.execute("""
-                SELECT * FROM usuarios
-                WHERE usuario = %s AND contraseña = %s
-            """, (user, password))
-            resultado = cursor.fetchone()
-            print("📦 Resultado SQL:", resultado)
+        try:
+            with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                cursor.execute("SELECT * FROM usuarios WHERE usuario = %s AND contraseña = %s", (user, password))
+                resultado = cursor.fetchone()
 
-            if resultado:
-                session['usuario'] = resultado['usuario']
-                session['rol'] = resultado['rol']
-                session['rut'] = resultado['rut']  # ✅ necesario para filtrar por RUT
+                if resultado:
+                    session['usuario'] = resultado['usuario']
+                    session['rol'] = resultado['rol']
+                    session['rut'] = resultado['rut']
 
-                if session['rol'] == 'admin':
-                    return redirect(url_for('asignar_personal'))
-                elif session['rol'] == 'jefeT':
-                    return redirect(url_for('control_gastos'))
-                elif session['rol'] == 'bodega':
-                    return redirect(url_for('solicitudes'))
-                elif session['rol'] == 'jefeB':
-                    return redirect(url_for('solicitudes'))                
+                    # --- NUEVO: CARGAR ESPECIALIDAD DESDE PGADMIN ---
+                    cursor.execute("SELECT especialidad FROM jefe_especialidad WHERE usuario_jefe = %s", (user,))
+                    esp_res = cursor.fetchone()
+                    session['especialidad_a_cargo'] = esp_res['especialidad'] if esp_res else None
 
+                    # Redirecciones
+                    if session['rol'] == 'admin': return redirect(url_for('dashboard'))
+                    if session['rol'] in ['jefeT', 'jefeB', 'supervisor']: return redirect(url_for('gestion_flota'))
+                    if session['rol'] == 'conductor': return redirect(url_for('inspeccion_vehiculo'))
+                    if session['rol'] == 'bodega': return redirect(url_for('solicitudes'))
+                    return redirect(url_for('resultado_hh'))
+        except Exception as e:
+            flash(f'Error crítico: {e}', 'danger')
+        finally:
+            if conexion: conexion.close()
+        
         flash('Credenciales incorrectas', 'danger')
-        return redirect(url_for('login'))
-
     return render_template('login.html')
 
 ######################################################################################################################
@@ -415,7 +426,6 @@ def devoluciones():
         url_descarga="/descargar_excel/devoluciones"
     )
 
-
 @app.route('/confirmar_devolucion', methods=['POST'])
 def confirmar_devolucion():
     if 'usuario' not in session:
@@ -658,9 +668,7 @@ def ver_inventario():
             ORDER BY p.id ASC
         """)
 
-
         inventario = cursor.fetchall()
-
 
         cursor.execute("SELECT DISTINCT categoria FROM productos ORDER BY categoria")
         categorias = [row[0] for row in cursor.fetchall()]
@@ -748,7 +756,6 @@ def editar_precio_producto():
 
     flash("Precio actualizado correctamente", "success")
     return redirect(url_for('ver_inventario'))
-
 
 @app.route('/editar_estado_producto', methods=['POST'])
 def editar_estado_producto():
@@ -839,7 +846,6 @@ def gestionar_centros_costo():
         centros = cursor.fetchall()
 
     return render_template('admin_centros.html', centros=centros)
-
 
 #######################################################################################################################
 # RUTA PARA CONTROL DE GASTOS
@@ -1183,10 +1189,9 @@ def eliminar_personal(rut):
     return redirect(url_for('asignar_personal'))
 
 ##################################################################################################################
-from datetime import datetime, timedelta, date
-
 @app.route('/registro_horas', methods=['GET', 'POST'])
 def registro_horas():
+    # 1. Verificación de Autenticación
     if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeT', 'jefeB']:
         flash("No tienes acceso a esta página", "danger")
         return redirect(url_for('login'))
@@ -1196,18 +1201,22 @@ def registro_horas():
         flash("❌ No se pudo conectar a la base de datos", "danger")
         return redirect(url_for('login'))
 
+    # Contexto del usuario logueado
+    usuario_login = session.get('usuario')
+    rut_usuario = session.get('rut')
+    rol_usuario = session.get('rol')
+    # Especialidad obtenida durante el login (desde tabla jefe_especialidad)
+    especialidad_jefe = session.get('especialidad_a_cargo')
+
     trabajadores = []
     semana_actual = ''
     centro_costo_actual = ''
     fechas_por_dia = {}
     resumen = {}
     valores_guardados = {}
-
     centros_costo = []
-    usuario = session.get('usuario')
-    rut_usuario = session.get('rut')
-    rol_usuario = session.get('rol')
 
+    # --- CARGA DE CENTROS DE COSTO SEGÚN ROL ---
     with conexion.cursor() as cursor:
         if rol_usuario == 'admin':
             cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal ORDER BY centro_costo")
@@ -1235,29 +1244,42 @@ def registro_horas():
                 flash("⚠️ Día no válido", "warning")
                 return redirect(url_for('registro_horas'))
 
+            # Validación de temporalidad (Semana actual y 4 anteriores)
             fecha_real_dt = datetime.strptime(fecha_real, '%Y-%m-%d').date()
             semana_actual_dt = hoy.isocalendar().week
             semana_objetivo = fecha_real_dt.isocalendar().week
             año_actual = hoy.isocalendar().year
             año_objetivo = fecha_real_dt.isocalendar().year
 
-            if año_actual != año_objetivo:
-                flash("⚠️ Solo se pueden editar semanas dentro del año actual.", "warning")
-                return redirect(url_for('registro_horas'))
+            #if año_actual != año_objetivo:
+            #    flash("⚠️ Solo se pueden editar semanas dentro del año actual.", "warning")
+            #    return redirect(url_for('registro_horas'))
             
-            if semana_objetivo < semana_actual_dt - 4 or fecha_real_dt > hoy:
-                flash("⚠️ Solo se pueden editar la semana actual y las 4 anteriores.", "warning")
-                return redirect(url_for('registro_horas'))
+            #if semana_objetivo < semana_actual_dt - 4 or fecha_real_dt > hoy:
+            #    flash("⚠️ Solo se pueden editar la semana actual y las 4 anteriores.", "warning")
+            #    return redirect(url_for('registro_horas'))
 
             mensaje_mostrado = False
-            with conexion.cursor() as cursor:
-                cursor.execute("SELECT rut, nombre, apellido FROM asignacion_personal WHERE centro_costo = %s", (centro_costo,))
+            with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                
+                # --- MEJORA: FILTRADO POR ESPECIALIDAD ---
+                if rol_usuario == 'jefeT' and especialidad_jefe:
+                    query_pers = """
+                        SELECT a.rut, a.nombre, a.apellido 
+                        FROM asignacion_personal a
+                        JOIN personal p ON a.rut = p.rut
+                        WHERE a.centro_costo = %s AND p.especialidad = %s
+                    """
+                    cursor.execute(query_pers, (centro_costo, especialidad_jefe))
+                else:
+                    cursor.execute("SELECT rut, nombre, apellido FROM asignacion_personal WHERE centro_costo = %s", (centro_costo,))
+                
                 personas = cursor.fetchall()
 
                 for persona in personas:
-                    rut = persona[0].strip()
-                    nombre = persona[1].strip()
-                    apellido = persona[2].strip()
+                    rut = persona['rut'].strip()
+                    nombre = persona['nombre'].strip()
+                    apellido = persona['apellido'].strip()
 
                     hn_key = f'hn_{rut}_{dia_a_guardar}'
                     he_key = f'he_{rut}_{dia_a_guardar}'
@@ -1271,25 +1293,24 @@ def registro_horas():
                     observacionP = None
 
                     try:
-                        # MEJORA: Se añade 'D' a la lista de estados permitidos
+                        # Manejo de estados (L, V, F, P, D)
                         if hn_val in ['L', 'V', 'F', 'P', 'D']:
                             horas_normales = 0
                             observacion = hn_val
                             if hn_val == 'P':
-                                tipo_permiso = request.form.get(f'tipo_permiso_{rut}_{dia_a_guardar}', '').strip()
-                                razon_permiso = request.form.get(f'razon_permiso_{rut}_{dia_a_guardar}', '').strip()
-                                if tipo_permiso and razon_permiso:
-                                    observacionP = f"{tipo_permiso} - {razon_permiso}"
-                                else:
-                                    observacionP = tipo_permiso or razon_permiso or None
+                                tp = request.form.get(f'tipo_permiso_{rut}_{dia_a_guardar}', '').strip()
+                                rp = request.form.get(f'razon_permiso_{rut}_{dia_a_guardar}', '').strip()
+                                observacionP = f"{tp} - {rp}" if tp and rp else (tp or rp or None)
                         elif hn_val == '':
                             horas_normales = 0
                         else:
                             horas_normales = round(float(hn_val.replace(',', '.')), 1)
-                            if horas_normales < 0 or horas_normales > 24 or (horas_normales * 10) % 1 != 0:
-                                flash(f"⚠️ Horas normales inválidas (máx. 1 decimal) para {rut}", "warning")
+                            if horas_normales < 0 or horas_normales > 24:
+                                flash(f"⚠️ Horas normales inválidas para {rut}", "warning")
                                 continue
 
+                        # --- MEJORA: CONTROL CRÍTICO 9 HH TOTALES ---
+                        # Sumamos horas registradas en OTROS centros para el mismo día
                         cursor.execute("""
                             SELECT SUM(horas_normales)
                             FROM registro_horas
@@ -1297,43 +1318,31 @@ def registro_horas():
                         """, (rut, fecha_real, centro_costo))
                         total_previas = cursor.fetchone()[0] or 0
 
-                        if float(total_previas) + horas_normales > 9:
-                            flash(f"⚠️ El trabajador {nombre} {apellido} ya tiene {total_previas}h en otros centros. Máximo 9h por día.", "warning")
-                            continue
+                        if (float(total_previas) + horas_normales) > 9.0:
+                            flash(f"🚨 BLOQUEO: {nombre} {apellido} ya registra {total_previas}h en otros centros. No se puede exceder el límite legal de 9h.", "danger")
+                            continue 
+                        # --- FIN MEJORA ---
 
                         horas_extras = int(he_val) if he_val != '' else 0
-                        if horas_extras < 0 or horas_extras > 24:
-                            flash(f"⚠️ Horas extras inválidas para {rut}", "warning")
-                            continue
-
                         dias_trabajados = 1 if observacion == 'V' else round(horas_normales / 9, 1) if horas_normales else 0
 
-                        cursor.execute("""
-                            SELECT 1 FROM registro_horas
-                            WHERE horas_fecha = %s AND centro_costo = %s AND rut = %s
-                        """, (fecha_real, centro_costo, rut))
-                        existe = cursor.fetchone()
-
-                        if existe:
+                        # Guardado o Actualización (Upsert)
+                        cursor.execute("SELECT 1 FROM registro_horas WHERE horas_fecha = %s AND centro_costo = %s AND rut = %s", (fecha_real, centro_costo, rut))
+                        if cursor.fetchone():
                             cursor.execute("""
-                                UPDATE registro_horas
-                                SET horas_normales = %s, horas_extras = %s,
-                                    observacion = %s, observacionP = %s,
-                                    dias_trabajados = %s, usuario = %s
+                                UPDATE registro_horas SET horas_normales = %s, horas_extras = %s, observacion = %s, 
+                                observacionP = %s, dias_trabajados = %s, usuario = %s
                                 WHERE rut = %s AND horas_fecha = %s AND centro_costo = %s
-                            """, (horas_normales, horas_extras, observacion, observacionP, dias_trabajados, usuario, rut, fecha_real, centro_costo))
+                            """, (horas_normales, horas_extras, observacion, observacionP, dias_trabajados, usuario_login, rut, fecha_real, centro_costo))
                         else:
                             cursor.execute("""
-                                INSERT INTO registro_horas (
-                                    rut, nombre, apellido, centro_costo,
-                                    horas_normales, horas_extras, horas_fecha,
-                                    fecha_registro, usuario, observacion, dias_trabajados, observacionP
-                                )
+                                INSERT INTO registro_horas (rut, nombre, apellido, centro_costo, horas_normales, horas_extras, 
+                                horas_fecha, fecha_registro, usuario, observacion, dias_trabajados, observacionP)
                                 VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, %s, %s, %s, %s)
-                            """, (rut, nombre, apellido, centro_costo, horas_normales, horas_extras, fecha_real, usuario, observacion, dias_trabajados, observacionP))
+                            """, (rut, nombre, apellido, centro_costo, horas_normales, horas_extras, fecha_real, usuario_login, observacion, dias_trabajados, observacionP))
 
                         if not mensaje_mostrado:
-                            flash("✅ Horas editadas con éxito.", "success")
+                            flash("✅ Horas procesadas correctamente.", "success")
                             mensaje_mostrado = True
 
                     except ValueError:
@@ -1343,6 +1352,7 @@ def registro_horas():
             return redirect(url_for('registro_horas'))
 
         else:
+            # --- LÓGICA DE VISUALIZACIÓN (GET / Cambio de Filtros) ---
             centro_costo_actual = request.form.get('centro_costo', '').strip()
             semana_actual = request.form.get('semana', '').strip()
 
@@ -1352,15 +1362,26 @@ def registro_horas():
                     primer_dia = datetime.fromisocalendar(int(year), int(week), 1).date()
                     domingo = primer_dia + timedelta(days=6)
 
-                    dias = ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'Dom']
-                    for i, d in enumerate(dias):
-                        fecha_dia = primer_dia + timedelta(days=i)
-                        fechas_por_dia[d] = fecha_dia.strftime('%Y-%m-%d')
+                    dias_lista = ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'Dom']
+                    for i, d in enumerate(dias_lista):
+                        fechas_por_dia[d] = (primer_dia + timedelta(days=i)).strftime('%Y-%m-%d')
 
-                    with conexion.cursor() as cursor:
-                        cursor.execute("SELECT nombre, apellido, rut FROM asignacion_personal WHERE centro_costo = %s", (centro_costo_actual,))
+                    with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                        # Visualización filtrada por Especialidad
+                        if rol_usuario == 'jefeT' and especialidad_jefe:
+                            cursor.execute("""
+                                SELECT a.nombre, a.apellido, a.rut 
+                                FROM asignacion_personal a
+                                JOIN personal p ON a.rut = p.rut
+                                WHERE a.centro_costo = %s AND p.especialidad = %s
+                                ORDER BY a.nombre ASC
+                            """, (centro_costo_actual, especialidad_jefe))
+                        else:
+                            cursor.execute("SELECT nombre, apellido, rut FROM asignacion_personal WHERE centro_costo = %s ORDER BY nombre ASC", (centro_costo_actual,))
+                        
                         trabajadores = cursor.fetchall()
 
+                        # Carga de registros guardados para poblar los inputs
                         cursor.execute("""
                             SELECT rut, horas_fecha, horas_normales, horas_extras, observacion
                             FROM registro_horas
@@ -1368,21 +1389,20 @@ def registro_horas():
                         """, (centro_costo_actual, primer_dia, domingo))
                         registros = cursor.fetchall()
 
-                        for rut, fecha, hn, he, obs in registros:
+                        for r in registros:
+                            rut, fecha, hn, he, obs = r['rut'], r['horas_fecha'], r['horas_normales'], r['horas_extras'], r['observacion']
                             for k, fecha_str in fechas_por_dia.items():
                                 if fecha.strftime('%Y-%m-%d') == fecha_str:
-                                    valores_guardados.setdefault(rut, {})[k] = {
-                                    'hn': hn,
-                                    'he': he,
-                                    'observacion': obs
-                                    }
+                                    valores_guardados.setdefault(rut, {})[k] = {'hn': hn, 'he': he, 'observacion': obs}
 
                 except Exception as e:
-                    flash(f"⚠️ Error al procesar la semana: {e}", "danger")
+                    flash(f"⚠️ Error al procesar la vista: {e}", "danger")
 
+    # Selección por defecto de centro de costo
     if not centro_costo_actual and centros_costo:
         centro_costo_actual = centros_costo[0]
 
+    # Carga de Resumen del Centro
     if centro_costo_actual:
         with conexion.cursor() as cursor:
             cursor.execute("""
@@ -1392,20 +1412,51 @@ def registro_horas():
                 WHERE centro_costo = %s AND horas_fecha <= CURRENT_DATE
             """, (centro_costo_actual,))
             fila = cursor.fetchone()
-            resumen = {
-                'ultima_fecha': fila[0],
-                'total_horas': fila[1] if fila[1] else 0
-            }
+            resumen = {'ultima_fecha': fila[0], 'total_horas': fila[1] if fila[1] else 0}
 
     return render_template("registro_horas.html",
-                           trabajadores=trabajadores,
-                           semana=semana_actual,
-                           centro_costo=centro_costo_actual,
-                           centros_costo=centros_costo,
-                           fechas_por_dia=fechas_por_dia,
-                           resumen=resumen,
-                           valores_guardados=valores_guardados)
-    
+                            trabajadores=trabajadores,
+                            semana=semana_actual,
+                            centro_costo=centro_costo_actual,
+                            centros_costo=centros_costo,
+                            fechas_por_dia=fechas_por_dia,
+                            resumen=resumen,
+                            valores_guardados=valores_guardados)    
+
+#########################################################################################
+@app.route('/exportar_trabajador', methods=['POST'])
+def exportar_trabajador():
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeT']:
+        return redirect(url_for('login'))
+
+    rut = request.form.get('rut_trabajador')
+    nueva_especialidad = request.form.get('nueva_especialidad')
+    usuario_origen = session.get('usuario')
+
+    conexion = obtener_conexion()
+    try:
+        with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+            # 1. Obtener nombre y especialidad actual
+            cursor.execute("SELECT nombre, apellido, especialidad FROM personal WHERE rut = %s", (rut,))
+            p = cursor.fetchone()
+            if not p: return redirect(url_for('asignar_personal'))
+
+            # 2. Actualizar Especialidad (Esto lo cambia de "jefe")
+            cursor.execute("UPDATE personal SET especialidad = %s WHERE rut = %s", (nueva_especialidad, rut))
+            
+            # 3. Registrar en Historial (Notificación diferida)
+            cursor.execute("""
+                INSERT INTO historial_rotacion (rut, especialidad_anterior, nueva_especialidad, movido_por, fecha)
+                VALUES (%s, %s, %s, %s, NOW())
+            """, (rut, p['especialidad'], nueva_especialidad, usuario_origen))
+            
+            conexion.commit()
+            flash(f"🔄 EXITOSO: {p['nombre']} {p['apellido']} ha sido exportado a {nueva_especialidad}.", "success")
+    except Exception as e:
+        flash(f"Error en la exportación: {e}", "danger")
+    finally:
+        if conexion: conexion.close()
+    return redirect(url_for('asignar_personal'))
 
 ########################################################################################################
 @app.route('/adquisiciones', methods=['GET', 'POST'])
@@ -1647,7 +1698,7 @@ def descargar_excel(tabla):
     writer.close()
     output.seek(0)
     return send_file(output, download_name=nombre_archivo, as_attachment=True)
-    
+
 #####################################################################################################################################
 @app.route('/resultado_hh', methods=['GET', 'POST'])
 def resultado_hh():
@@ -1662,7 +1713,7 @@ def resultado_hh():
     datos = []
     
     # Inicialización de variables para el template
-    tipo_filtro = 'ninguno' # Inicializado para evitar NoneType en el template
+    tipo_filtro = 'ninguno'
     fecha_filtro = None
     centro_costo_seleccionado = None
     especialidad_seleccionada = None
@@ -1677,9 +1728,7 @@ def resultado_hh():
             especialidades = [fila[0] for fila in cursor.fetchall()]
     except Exception as e:
         flash(f"Error al cargar filtros: {e}", "danger")
-        # Asegura que la conexión se maneje o se cierre si algo falla aquí
         return render_template('resultado_hh.html', centros_costo=[], especialidades=[])
-
 
     # 3. Manejo de la Solicitud POST (Filtro)
     if request.method == 'POST':
@@ -1688,9 +1737,9 @@ def resultado_hh():
         centro_costo_seleccionado = request.form.get('centro_costo')
         especialidad_seleccionada = request.form.get('especialidad')
 
-        # --- A. Lógica para manejar filtros de fecha (Centralizada) ---
+        # --- A. Lógica para manejar filtros de fecha ---
         condiciones_fecha = ""
-        parametros_fecha = []
+        parametros_query = []
 
         if tipo_filtro and tipo_filtro != 'ninguno' and fecha_filtro:
             try:
@@ -1699,87 +1748,62 @@ def resultado_hh():
                     primer_dia = datetime.date.fromisocalendar(anio, semana_num, 1)
                     ultimo_dia = primer_dia + datetime.timedelta(days=6)
                     condiciones_fecha = "AND rh.horas_fecha BETWEEN %s AND %s"
-                    parametros_fecha.extend([primer_dia, ultimo_dia])
+                    parametros_query.extend([primer_dia, ultimo_dia])
                 elif tipo_filtro == 'mes':
                     anio, mes = map(int, fecha_filtro.split('-'))
                     condiciones_fecha = "AND EXTRACT(YEAR FROM rh.horas_fecha) = %s AND EXTRACT(MONTH FROM rh.horas_fecha) = %s"
-                    parametros_fecha.extend([anio, mes])
+                    parametros_query.extend([anio, mes])
             except ValueError:
-                flash("Formato de fecha inválido. Por favor, verifica el formato (YYYY-MM para Mes, YYYY-WXX para Semana).", "warning")
-                # Si el formato falla, salimos del proceso de consulta para no intentar ejecutar SQL
-                return render_template('resultado_hh.html',
-                                     centros_costo=centros_costo,
-                                     especialidades=especialidades,
-                                     centro_seleccionado=centro_costo_seleccionado,
-                                     especialidad_seleccionada=especialidad_seleccionada,
-                                     tipo_filtro=tipo_filtro,
-                                     fecha_filtro=fecha_filtro,
-                                     datos=datos)
-        
-        # --- B. Ejecución de la Consulta basada en la selección (ACTUALIZADA: COLUMNA ELIMINADA) ---
+                flash("Formato de fecha inválido.", "warning")
+                return redirect(url_for('resultado_hh'))
 
+        # --- B. Ejecución de la Consulta con Filtros Dinámicos Combinados ---
         try:
-            if especialidad_seleccionada and not centro_costo_seleccionado:
-                with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                    query = f"""
-                        SELECT p.nombre, p.apellido, p.rut,
-                            p.pago_hora, -- OBTENEMOS EL PAGO POR HORA
-                            COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) AS total_hn,
-                            COALESCE(SUM(CASE WHEN rh.horas_extras > 0 THEN rh.horas_extras ELSE 0 END), 0) AS total_he,
-                            COALESCE(COUNT(DISTINCT rh.horas_fecha) FILTER (WHERE rh.horas_normales > 0 OR rh.horas_extras > 0), 0) AS dias_trabajados,
-                            COUNT(*) FILTER (WHERE rh.observacion ILIKE 'L') AS licencias,
-                            COUNT(*) FILTER (WHERE rh.observacion ILIKE 'P') AS permisos,
-                            COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas,
-                            COUNT(*) FILTER (WHERE rh.observacion ILIKE 'V') AS vacaciones,
-                            
-                            -- CÁLCULOS REQUERIDOS (dias_trabajados_9hr eliminado)
-                            (COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) * p.pago_hora) AS monto_a_pagar
-                            
-                        FROM personal p
-                        LEFT JOIN registro_horas rh ON p.rut = rh.rut
-                        WHERE p.especialidad = %s {condiciones_fecha}
-                        GROUP BY p.nombre, p.apellido, p.rut, p.pago_hora
-                        ORDER BY p.apellido, p.nombre
-                    """
-                    # Parámetros: [especialidad] + [fechas...]
-                    cursor.execute(query, [especialidad_seleccionada] + parametros_fecha)
-                    datos = cursor.fetchall()
+            with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                # Base de la query: Siempre unimos Personal con Registro_Horas
+                # El WHERE 1=1 permite añadir condiciones dinámicamente
+                query = f"""
+                    SELECT p.nombre, p.apellido, p.rut, p.pago_hora,
+                        COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) AS total_hn,
+                        COALESCE(SUM(CASE WHEN rh.horas_extras > 0 THEN rh.horas_extras ELSE 0 END), 0) AS total_he,
+                        COALESCE(COUNT(DISTINCT rh.horas_fecha) FILTER (WHERE rh.horas_normales > 0 OR rh.horas_extras > 0), 0) AS dias_trabajados,
+                        COUNT(*) FILTER (WHERE rh.observacion ILIKE 'L') AS licencias,
+                        COUNT(*) FILTER (WHERE rh.observacion ILIKE 'P') AS permisos,
+                        COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas,
+                        COUNT(*) FILTER (WHERE rh.observacion ILIKE 'V') AS vacaciones,
+                        (COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) * p.pago_hora) AS monto_a_pagar
+                    FROM personal p
+                    LEFT JOIN registro_horas rh ON p.rut = rh.rut
+                    WHERE 1=1
+                """
 
-            elif centro_costo_seleccionado and not especialidad_seleccionada:
-                with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                    query = f"""
-                        SELECT p.nombre, p.apellido, p.rut,
-                            p.pago_hora, -- OBTENEMOS EL PAGO POR HORA
-                            COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) AS total_hn,
-                            COALESCE(SUM(CASE WHEN rh.horas_extras > 0 THEN rh.horas_extras ELSE 0 END), 0) AS total_he,
-                            COALESCE(COUNT(DISTINCT rh.horas_fecha) FILTER (WHERE rh.horas_normales > 0 OR rh.horas_extras > 0), 0) AS dias_trabajados,
-                            COUNT(*) FILTER (WHERE rh.observacion ILIKE 'L') AS licencias,
-                            COUNT(*) FILTER (WHERE rh.observacion ILIKE 'P') AS permisos,
-                            COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas,
-                            COUNT(*) FILTER (WHERE rh.observacion ILIKE 'V') AS vacaciones,
+                # Filtro combinable 1: Centro de Costo
+                if centro_costo_seleccionado:
+                    query += " AND rh.centro_costo = %s"
+                    parametros_query.append(centro_costo_seleccionado)
 
-                            -- CÁLCULOS REQUERIDOS (dias_trabajados_9hr eliminado)
-                            (COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) * p.pago_hora) AS monto_a_pagar
+                # Filtro combinable 2: Especialidad
+                if especialidad_seleccionada:
+                    query += " AND p.especialidad = %s"
+                    parametros_query.append(especialidad_seleccionada)
 
-                        FROM asignacion_personal ap
-                        JOIN personal p ON ap.rut = p.rut
-                        LEFT JOIN registro_horas rh ON p.rut = rh.rut AND rh.centro_costo = ap.centro_costo
-                        WHERE ap.centro_costo = %s {condiciones_fecha}
-                        GROUP BY p.nombre, p.apellido, p.rut, p.pago_hora
-                        ORDER BY p.apellido, p.nombre
-                    """
-                    # Parámetros: [centro_costo] + [fechas...]
-                    cursor.execute(query, [centro_costo_seleccionado] + parametros_fecha)
-                    datos = cursor.fetchall()
-            
-            # Si no hay filtros, 'datos' queda vacío y el template lo maneja
-        
+                # Aplicar condiciones de fecha si existen
+                if condiciones_fecha:
+                    query += f" {condiciones_fecha}"
+
+                # Agrupación y orden
+                query += " GROUP BY p.nombre, p.apellido, p.rut, p.pago_hora ORDER BY p.apellido, p.nombre"
+                
+                cursor.execute(query, parametros_query)
+                datos = cursor.fetchall()
+
         except Exception as e:
             flash(f"Error al ejecutar la consulta SQL: {e}", "danger")
             datos = []
+        finally:
+            conexion.close()
 
-
-    # 4. Renderizar el template
+    # 4. Renderizar el template con los filtros persistidos
     return render_template('resultado_hh.html',
                            centros_costo=centros_costo,
                            especialidades=especialidades,
@@ -1788,7 +1812,7 @@ def resultado_hh():
                            tipo_filtro=tipo_filtro,
                            fecha_filtro=fecha_filtro,
                            datos=datos)
-
+    
 ######################################
 
 @app.route('/exportar_resultado_hh_excel', methods=['POST'])
@@ -1805,29 +1829,40 @@ def exportar_resultado_hh_excel():
     tipo_filtro = request.form.get('tipo_filtro')
     fecha_filtro = request.form.get('fecha_filtro')
 
-    condiciones_fecha = ""
+    # --- 1. LÓGICA DE FILTROS DINÁMICOS ---
+    condiciones_sql = " WHERE 1=1"
     parametros = []
 
-    # Manejo de filtros de fecha
-    if tipo_filtro == 'semana' and fecha_filtro:
+    # Manejo de filtros de fecha (Sincronizado con resultado_hh)
+    if tipo_filtro and tipo_filtro != 'ninguno' and fecha_filtro:
         try:
-            anio, semana_num = map(int, fecha_filtro.split('-W'))
-            primer_dia = datetime.date.fromisocalendar(anio, semana_num, 1)
-            ultimo_dia = primer_dia + datetime.timedelta(days=6)
-            condiciones_fecha = "AND rh.horas_fecha BETWEEN %s AND %s"
-            parametros.extend([primer_dia, ultimo_dia])
-        except ValueError: pass
-    elif tipo_filtro == 'mes' and fecha_filtro:
-        try:
-            anio, mes = map(int, fecha_filtro.split('-'))
-            condiciones_fecha = "AND EXTRACT(YEAR FROM rh.horas_fecha) = %s AND EXTRACT(MONTH FROM rh.horas_fecha) = %s"
-            parametros.extend([anio, mes])
-        except ValueError: pass
+            if tipo_filtro == 'semana':
+                anio, semana_num = map(int, fecha_filtro.split('-W'))
+                primer_dia = datetime.date.fromisocalendar(anio, semana_num, 1)
+                ultimo_dia = primer_dia + datetime.timedelta(days=6)
+                condiciones_sql += " AND rh.horas_fecha BETWEEN %s AND %s"
+                parametros.extend([primer_dia, ultimo_dia])
+            elif tipo_filtro == 'mes':
+                anio, mes = map(int, fecha_filtro.split('-'))
+                condiciones_sql += " AND EXTRACT(YEAR FROM rh.horas_fecha) = %s AND EXTRACT(MONTH FROM rh.horas_fecha) = %s"
+                parametros.extend([anio, mes])
+        except ValueError:
+            pass
+
+    # Filtro combinado: Centro de Costo
+    if centro_costo and centro_costo != '':
+        condiciones_sql += " AND rh.centro_costo = %s"
+        parametros.append(centro_costo)
+
+    # Filtro combinado: Especialidad
+    if especialidad and especialidad != '':
+        condiciones_sql += " AND p.especialidad = %s"
+        parametros.append(especialidad)
 
     conexion = obtener_conexion()
     try:
         with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-            # Query incluyendo la nueva columna 'D' para Desvinculados
+            # Columnas seleccionadas (Incluyendo Desvinculados 'D')
             select_columns = """
                 p.nombre, p.apellido, p.rut, p.pago_hora,
                 COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) AS total_hn,
@@ -1841,33 +1876,33 @@ def exportar_resultado_hh_excel():
                 (COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) * p.pago_hora) AS monto_a_pagar
             """
 
-            if centro_costo and especialidad:
-                query = f"SELECT {select_columns} FROM asignacion_personal ap JOIN personal p ON ap.rut = p.rut LEFT JOIN registro_horas rh ON p.rut = rh.rut AND rh.centro_costo = ap.centro_costo WHERE ap.centro_costo = %s AND p.especialidad = %s {condiciones_fecha} GROUP BY p.nombre, p.apellido, p.rut, p.pago_hora ORDER BY p.apellido, p.nombre"
-                cursor.execute(query, [centro_costo, especialidad] + parametros)
-            elif especialidad:
-                query = f"SELECT {select_columns} FROM personal p LEFT JOIN registro_horas rh ON p.rut = rh.rut WHERE p.especialidad = %s {condiciones_fecha} GROUP BY p.nombre, p.apellido, p.rut, p.pago_hora ORDER BY p.apellido, p.nombre"
-                cursor.execute(query, [especialidad] + parametros)
-            elif centro_costo:
-                query = f"SELECT {select_columns} FROM asignacion_personal ap JOIN personal p ON ap.rut = p.rut LEFT JOIN registro_horas rh ON p.rut = rh.rut AND rh.centro_costo = ap.centro_costo WHERE ap.centro_costo = %s {condiciones_fecha} GROUP BY p.nombre, p.apellido, p.rut, p.pago_hora ORDER BY p.apellido, p.nombre"
-                cursor.execute(query, [centro_costo] + parametros)
-            else:
-                return redirect(url_for('resultado_hh'))
-
+            # Construcción final de la Query
+            query = f"""
+                SELECT {select_columns}
+                FROM personal p
+                LEFT JOIN registro_horas rh ON p.rut = rh.rut
+                {condiciones_sql}
+                GROUP BY p.nombre, p.apellido, p.rut, p.pago_hora
+                ORDER BY p.apellido, p.nombre
+            """
+            
+            cursor.execute(query, parametros)
             datos = cursor.fetchall()
             columnas = [desc.name for desc in cursor.description]
             
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error en exportación Excel: {e}")
         return redirect(url_for('resultado_hh'))
     finally:
         if conexion: conexion.close()
 
-    if not datos: return redirect(url_for('resultado_hh'))
+    if not datos:
+        return redirect(url_for('resultado_hh'))
 
+    # --- 2. PROCESAMIENTO DE DATOS ---
     df = pd.DataFrame(datos, columns=columnas)
     df = df.fillna(0)
 
-    # Renombrado de columnas
     df.rename(columns={
         'nombre': 'Nombre', 'apellido': 'Apellido', 'rut': 'RUT', 'pago_hora': 'Pago por Hora',
         'total_hn': 'Total Horas Normales', 'total_he': 'Total Horas Extras',
@@ -1876,11 +1911,10 @@ def exportar_resultado_hh_excel():
         'desvinculados': 'Desvinculados', 'monto_a_pagar': 'Monto a Pagar (HN)'
     }, inplace=True)
 
-    # Redondeo de decimales solicitado
     for col in ['Pago por Hora', 'Total Horas Normales', 'Total Horas Extras', 'Monto a Pagar (HN)']:
         if col in df.columns: df[col] = df[col].round(1)
 
-    # --- DISEÑO PROFESIONAL CON XLSXWRITER ---
+    # --- 3. DISEÑO PROFESIONAL CON XLSXWRITER ---
     output = BytesIO()
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
     df.to_excel(writer, index=False, sheet_name='Reporte', startrow=1)
@@ -1888,30 +1922,26 @@ def exportar_resultado_hh_excel():
     workbook  = writer.book
     worksheet = writer.sheets['Reporte']
 
-    # Definición de formatos institucionales
     formato_cuadricula = workbook.add_format({'border': 1, 'valign': 'vcenter'})
     formato_encabezado = workbook.add_format({'bold': True, 'border': 1, 'bg_color': '#D9D9D9', 'align': 'center'})
     formato_titulo = workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center', 'font_color': '#D45D00'})
 
-    # Aplicar cuadriculado y formatos a los datos
+    # Datos y encabezados
     for r_idx in range(len(df)):
         for c_idx in range(len(df.columns)):
             worksheet.write(r_idx + 2, c_idx, df.iloc[r_idx, c_idx], formato_cuadricula)
 
-    # Encabezados con formato gris
     for c_idx, col_name in enumerate(df.columns):
         worksheet.write(1, c_idx, col_name, formato_encabezado)
 
-    # Insertar Logo JCM
+    # Logo y Título
     ruta_logo = os.path.join(app.root_path, 'static', 'logo.png')
     if os.path.exists(ruta_logo):
         worksheet.insert_image('A1', ruta_logo, {'x_scale': 0.35, 'y_scale': 0.35, 'x_offset': 5, 'y_offset': 0})
 
-    # Título representativo centrado
-    titulo_texto = f"REPORTE RESULTADOS HH - {centro_costo if centro_costo else 'GENERAL'}"
+    titulo_texto = f"REPORTE RESULTADOS HH - {centro_costo if centro_costo else 'GENERAL'} - {especialidad if especialidad else 'TODAS'}"
     worksheet.merge_range(0, 1, 0, len(df.columns) - 1, titulo_texto, formato_titulo)
 
-    # Ajuste de dimensiones
     worksheet.set_row(0, 30) 
     for i, col in enumerate(df.columns):
         worksheet.set_column(i, i, max(len(col), 12) + 2)
@@ -1922,13 +1952,438 @@ def exportar_resultado_hh_excel():
     nombre_archivo = f"Resultado_HH_{datetime.date.today()}.xlsx"
     return send_file(output, download_name=nombre_archivo, as_attachment=True)
 
-######################################################################################################333
+######################################################################################################
+# --- MÓDULO 1: DASHBOARD GENERAL (KPIs de Gestión) ---
+@app.route('/dashboard', methods=['GET', 'POST'])
+def dashboard():
+    # 1. Validación de sesión y roles permitidos
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeB', 'jefeT']:
+        return redirect(url_for('login'))
 
+    rol = session.get('rol')
+    conexion = obtener_conexion()
+    
+    # Captura de filtros desde la URL para persistencia (Método GET)
+    centro_filtro = request.args.get('centro_costo', '')
+    fecha_desde = request.args.get('fecha_desde', '')
+    fecha_hasta = request.args.get('fecha_hasta', '')
+
+    # 2. Inicialización de variables de respaldo
+    centros = []
+    datos_gastos = []
+    evolucion_gastos = []
+    inventario_datos = []
+    consumos_centro = [] 
+    asistencia = {}
+    estados = {'op': 0, 'def': 0, 'no_op': 0}
+
+    try:
+        with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+            # Consulta maestra de centros para el filtro superior
+            cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal ORDER BY centro_costo")
+            centros = [row['centro_costo'] for row in cursor.fetchall()]
+
+            # 3. Lógica para el Administrador
+            if rol == 'admin':
+                # --- MEJORA APLICADA: Gastos por Categoría Filtrados ---
+                query_gastos = "SELECT categoria, SUM(monto_registro) as total FROM registro_costos WHERE 1=1"
+                params_gastos = []
+
+                if centro_filtro:
+                    query_gastos += " AND centro_costo = %s"
+                    params_gastos.append(centro_filtro)
+                
+                if fecha_desde and fecha_hasta:
+                    query_gastos += " AND fecha_registro BETWEEN %s AND %s"
+                    params_gastos.extend([fecha_desde, fecha_hasta])
+                
+                query_gastos += " GROUP BY categoria"
+                cursor.execute(query_gastos, params_gastos)
+                datos_gastos = cursor.fetchall()
+
+                # Gráfico Horizontal Unificado (Consumos)
+                query_consumo = """
+                    SELECT producto_nombre, SUM(total_fila) as total
+                    FROM (
+                        SELECT producto_nombre, (cantidad * precio) as total_fila, centro_costo, fecha_solicitud as fecha
+                        FROM historial_solicitudes
+                        UNION ALL
+                        SELECT producto_nombre, (cantidad * precio_unitario) as total_fila, centro_costo, fecha_entrada as fecha
+                        FROM historial_entradas
+                    ) AS movimientos
+                    WHERE 1=1
+                """
+                params_consumo = []
+
+                if centro_filtro:
+                    query_consumo += " AND centro_costo = %s"
+                    params_consumo.append(centro_filtro)
+                
+                if fecha_desde and fecha_hasta:
+                    query_consumo += " AND fecha BETWEEN %s AND %s"
+                    params_consumo.extend([fecha_desde, fecha_hasta])
+                
+                query_consumo += " GROUP BY producto_nombre ORDER BY total DESC LIMIT 10"
+                cursor.execute(query_consumo, params_consumo)
+                filas_consumo = cursor.fetchall()
+                
+                consumos_centro = [
+                    {
+                        "producto_nombre": row["producto_nombre"], 
+                        "total": float(row["total"]) if row["total"] else 0
+                    } for row in filas_consumo
+                ]
+                
+                # --- MEJORA APLICADA: Estado de Elementos Filtrado por Centro de Costo ---
+                query_estados = """
+                    SELECT 
+                        COUNT(*) FILTER (WHERE estado = 'OPERATIVO') as op,
+                        COUNT(*) FILTER (WHERE estado = 'OPERATIVO CON DEFICIENCIA') as def,
+                        COUNT(*) FILTER (WHERE estado = 'NO OPERATIVO') as no_op
+                    FROM productos 
+                    WHERE categoria != 'CAMIONETA'
+                """
+                params_estados = []
+
+                if centro_filtro:
+                    query_estados += " AND centro_costo = %s"
+                    params_estados.append(centro_filtro)
+
+                cursor.execute(query_estados, params_estados)
+                resultado_estados = cursor.fetchone()
+                if resultado_estados:
+                    estados = dict(resultado_estados)
+
+    except Exception as e:
+        print(f"⚠️ Error en carga de Dashboard: {e}")
+    finally:
+        if conexion:
+            conexion.close()
+
+    # 4. Retorno de plantilla con variables sincronizadas
+    return render_template('dashboard.html', 
+                           centros=centros, 
+                           gastos_cat=datos_gastos, 
+                           evolucion=evolucion_gastos,
+                           inventario=inventario_datos, 
+                           consumos_centro=consumos_centro, 
+                           centro_sel=centro_filtro, 
+                           fecha_desde=fecha_desde,
+                           fecha_hasta=fecha_hasta,
+                           asistencia=asistencia,
+                           estados=estados, 
+                           rol=rol)
+                                        
+#####################################################
+# --- MÓDULO 2: GESTIÓN DE FLOTA (Módulo Nuevo y Autónomo) ---
+
+@app.route('/gestion_flota')
+def gestion_flota():
+    # 1. Verificación de Autenticación
+    if 'usuario' not in session:
+        return redirect(url_for('login'))
+        
+    rol = session.get('rol')
+    
+    # 2. Lógica de Restricción Específica
+    if rol == 'conductor':
+        flash("Acceso limitado: Los conductores deben realizar la inspección directa del vehículo.", "info")
+        return redirect(url_for('inspeccion_vehiculo'))
+
+    if rol not in ['admin', 'jefeB', 'jefeT', 'supervisor']:
+        flash("No tiene permisos para acceder al centro de gestión de flota.", "danger")
+        return redirect(url_for('dashboard'))
+
+    vehiculos = []
+    reservas = []
+    
+    conexion = obtener_conexion()
+    try:
+        with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+            # AJUSTE SQL: Seleccionamos v.* para obtener 'persona_a_cargo_rut' directamente
+            # No necesitamos el JOIN con usuarios aquí porque el mapeo lo hace Python con el diccionario
+            cursor.execute("""
+                SELECT * FROM vehiculos_empresa 
+                ORDER BY patente
+            """)
+            vehiculos_raw = cursor.fetchall()
+            
+            # --- MEJORA: Aplicar Nombres Amigables ---
+            for v in vehiculos_raw:
+                vehiculo_dict = dict(v) 
+                
+                # Extraemos el RUT directamente de la columna de la tabla vehiculos_empresa
+                rut_a_cargo = v.get('persona_a_cargo_rut')
+                
+                if rut_a_cargo:
+                    # Llamamos a tu función robusta (la que limpia espacios y mayúsculas)
+                    nombre, apellido = obtener_datos_por_rut(rut_a_cargo)
+                    
+                    # Si la función no lo encuentra en el diccionario, mostrará "RUT: XXXXX (No Mapeado)"
+                    # Si lo encuentra, mostrará el nombre real
+                    vehiculo_dict['nombre_responsable_amigable'] = f"{nombre} {apellido}"
+                else:
+                    vehiculo_dict['nombre_responsable_amigable'] = "Sin asignar"
+                
+                vehiculos.append(vehiculo_dict)
+            
+            # Obtiene las reservas activas para el calendario (FullCalendar)
+            cursor.execute("""
+                SELECT r.*, v.patente 
+                FROM reservas_vehiculos r
+                JOIN vehiculos_empresa v ON r.vehiculo_id = v.id
+            """)
+            reservas = cursor.fetchall()
+            
+    except Exception as e:
+        print(f"⚠️ Error en carga de flota: {e}")
+        flash("Error interno al cargar los datos de flota.", "warning")
+    finally:
+        if conexion:
+            conexion.close()
+            
+    return render_template('gestion_flota.html', vehiculos=vehiculos, reservas=reservas)
+
+###################################################################
+@app.route('/solicitar_vehiculo', methods=['POST'])
+def solicitar_vehiculo():
+    if 'usuario' not in session:
+        return redirect(url_for('login'))
+
+    # 1. Captura de datos del formulario
+    vehiculo_id = request.form.get('vehiculo_id')
+    f_inicio_raw = request.form.get('fecha_inicio')
+    f_fin_raw = request.form.get('fecha_fin')
+    tipo_evento = request.form.get('tipo_evento')
+    por_hora = request.form.get('reserva_por_hora') # Captura el checkbox del HTML
+    solicitante_rut = session.get('rut')
+
+    # 2. Normalización de Fechas (Lógica Híbrida)
+    # Si el input es 'date', vendrá como YYYY-MM-DD
+    # Si el input es 'datetime-local', vendrá como YYYY-MM-DDTHH:MM
+    
+    if not por_hora:
+        # Reserva por DÍA COMPLETO: Forzamos el rango horario total
+        fecha_inicio = f"{f_inicio_raw} 00:00:00"
+        fecha_fin = f"{f_fin_raw} 23:59:59"
+    else:
+        # Reserva POR HORA: Reemplazamos la 'T' del formato HTML5 por un espacio para PostgreSQL
+        fecha_inicio = f_inicio_raw.replace('T', ' ')
+        fecha_fin = f_fin_raw.replace('T', ' ')
+
+    conexion = obtener_conexion()
+    try:
+        with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+            # 3. Validación de Disponibilidad (Cruce de horarios)
+            # Esta consulta detecta si existe CUALQUIER traslape de tiempo
+            cursor.execute("""
+                SELECT r.*, v.patente 
+                FROM reservas_vehiculos r
+                JOIN vehiculos_empresa v ON r.vehiculo_id = v.id
+                WHERE r.vehiculo_id = %s 
+                AND (
+                    (fecha_inicio <= %s AND fecha_fin >= %s) -- Caso traslape total o parcial
+                )
+            """, (vehiculo_id, fecha_fin, fecha_inicio))
+            
+            conflicto = cursor.fetchone()
+
+            if conflicto:
+                # Si hay conflicto, mostramos el error y redirigimos a Flota (no al login)
+                msg = f"⚠️ BLOQUEO: El vehículo {conflicto['patente']} ya tiene una reserva "
+                msg += f"desde {conflicto['fecha_inicio'].strftime('%d/%m %H:%M')} "
+                msg += f"hasta {conflicto['fecha_fin'].strftime('%d/%m %H:%M')}."
+                flash(msg, "danger")
+                return redirect(url_for('gestion_flota'))
+
+            # 4. Inserción de la Reserva
+            cursor.execute("""
+                INSERT INTO reservas_vehiculos (vehiculo_id, solicitante_rut, fecha_inicio, fecha_fin, tipo_evento)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (vehiculo_id, solicitante_rut, fecha_inicio, fecha_fin, tipo_evento))
+            
+            conexion.commit()
+            flash("✅ Reserva registrada exitosamente.", "success")
+
+    except Exception as e:
+        print(f"⚠️ Error al solicitar vehículo: {e}")
+        flash("Error interno al procesar la solicitud.", "danger")
+    finally:
+        if conexion:
+            conexion.close()
+
+    return redirect(url_for('gestion_flota'))
+
+###################################################################
+@app.route('/api/auditoria_vehiculo/<int:vehiculo_id>')
+def api_auditoria_vehiculo(vehiculo_id):
+    # 1. Seguridad: Solo roles autorizados pueden ver auditorías
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeB', 'jefeT', 'supervisor']:
+        return jsonify({"error": "No autorizado"}), 403
+
+    # 2. Captura de filtros de fecha desde la URL (enviados por el Modal)
+    f_desde = request.args.get('desde')
+    f_hasta = request.args.get('hasta')
+
+    conexion = obtener_conexion()
+    historial_datos = []
+
+    try:
+        with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+            # 3. Consulta SQL con JOINs para traer Reservas + Inspecciones
+            # Usamos alias para 'estado_vehiculo' como solicitaste
+            query = """
+                SELECT 
+                    r.solicitante_rut, 
+                    r.fecha_inicio, 
+                    r.fecha_fin, 
+                    r.tipo_evento AS motivo,
+                    i.estado_vehiculo, 
+                    i.observaciones AS detalle_tecnico,
+                    v.patente
+                FROM reservas_vehiculos r
+                JOIN vehiculos_empresa v ON r.vehiculo_id = v.id
+                LEFT JOIN inspecciones_flota i ON r.vehiculo_id = i.vehiculo_id 
+                    AND (i.fecha::date BETWEEN r.fecha_inicio AND r.fecha_fin)
+                WHERE r.vehiculo_id = %s
+            """
+            params = [vehiculo_id]
+
+            # Aplicar filtros de fecha si el admin los ingresó en el modal
+            if f_desde and f_hasta:
+                query += " AND r.fecha_inicio BETWEEN %s AND %s"
+                params.extend([f_desde, f_hasta])
+            
+            query += " ORDER BY r.fecha_inicio DESC"
+            
+            cursor.execute(query, tuple(params))
+            rows = cursor.fetchall()
+
+            # 4. Procesamiento de datos con "Variables Auxiliares" (Mapeo de nombres)
+            for row in rows:
+                nombre, apellido = obtener_datos_por_rut(row['solicitante_rut'])
+                
+                historial_datos.append({
+                    'nombre': nombre,
+                    'apellido': apellido,
+                    'rut': row['solicitante_rut'],
+                    'fecha_solicitud': row['fecha_inicio'].strftime('%d/%m/%Y'),
+                    'periodo': f"{row['fecha_inicio'].strftime('%d/%m/%Y')} al {row['fecha_fin'].strftime('%d/%m/%Y')}",
+                    'motivo': row['motivo'],
+                    'estado_final': row['estado_vehiculo'] or "Sin reporte",
+                    'detalle': row['detalle_tecnico'] or "Sin observaciones",
+                    'patente': row['patente']
+                })
+
+    except Exception as e:
+        print(f"⚠️ Error en API Auditoría: {e}")
+        return jsonify({"error": "Error interno"}), 500
+    finally:
+        if conexion:
+            conexion.close()
+
+    # Enviamos la lista final a la ventana emergente
+    return jsonify(historial_datos)
+
+######################################################################################################
+@app.route('/inspeccion_vehiculo', methods=['GET', 'POST'])
+def inspeccion_vehiculo():
+    if 'usuario' not in session:
+        return redirect(url_for('login'))
+
+    # Inicialización para evitar UnboundLocalError
+    vehiculos = []
+    conexion = obtener_conexion()
+    
+    try:
+        with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+            if request.method == 'POST':
+                # 1. Captura de datos
+                vehiculo_id = request.form.get('vehiculo_id')
+                kilometraje = request.form.get('kilometraje')
+                estado_vehiculo = request.form.get('estado_vehiculo')
+                observaciones = request.form.get('observaciones')
+                rut_inspector = session.get('rut')
+
+                # 2. Registro en tabla de inspecciones
+                cursor.execute("""
+                    INSERT INTO inspecciones_flota (vehiculo_id, rut_inspector, kilometraje, estado_vehiculo, observaciones, fecha)
+                    VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                """, (vehiculo_id, rut_inspector, kilometraje, estado_vehiculo, observaciones))
+                
+                # 3. MEJORA INDUSTRIAL: Actualización automática de kilometraje en la tabla maestra
+                # Esto permite tener el dato siempre actualizado para alertas de mantenimiento
+                cursor.execute("""
+                    UPDATE vehiculos_empresa 
+                    SET kilometraje_actual = %s 
+                    WHERE id = %s
+                """, (kilometraje, vehiculo_id))
+                
+                conexion.commit()
+                flash("✅ Inspección técnica registrada. Kilometraje actualizado en sistema.", "success")
+                return redirect(url_for('gestion_flota')) # Redirección alineada al módulo de flota
+
+            # GET: Cargar vehículos para el selector (Consistente con nombres de tablas verificados)
+            cursor.execute("SELECT id, patente, marca, modelo FROM vehiculos_empresa ORDER BY patente")
+            vehiculos = cursor.fetchall()
+            
+    except Exception as e:
+        print(f"⚠️ Error en inspección: {e}")
+        flash("Error al procesar la inspección técnica.", "danger")
+    finally:
+        if conexion:
+            conexion.close()
+            
+    return render_template('inspeccion_vehiculo.html', vehiculos=vehiculos)
+
+#########################################
+@app.route('/anular_reserva/<int:reserva_id>', methods=['POST'])
+def anular_reserva(reserva_id):
+    # 1. Verificación de permisos (Seguridad)
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'jefeB', 'jefeT', 'supervisor']:
+        flash("No tiene permisos para anular reservas.", "danger")
+        return redirect(url_for('gestion_flota'))
+
+    conexion = obtener_conexion()
+    try:
+        with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+            # 2. Obtener el vehiculo_id antes de borrar la reserva (para liberar el activo)
+            cursor.execute("SELECT vehiculo_id FROM reservas_vehiculos WHERE id = %s", (reserva_id,))
+            reserva = cursor.fetchone()
+            
+            if reserva:
+                vehiculo_id = reserva['vehiculo_id']
+
+                # 3. ELIMINACIÓN FÍSICA: Borra el registro de la reserva
+                cursor.execute("DELETE FROM reservas_vehiculos WHERE id = %s", (reserva_id,))
+
+                # 4. RESTAURACIÓN DEL ACTIVO: Devuelve el vehículo a 'DISPONIBLE'
+                # IMPORTANTE: Se limpia también la persona a cargo
+                cursor.execute("""
+                    UPDATE vehiculos_empresa 
+                    SET estado_actual = 'DISPONIBLE', persona_a_cargo_rut = NULL 
+                    WHERE id = %s
+                """, (vehiculo_id,))
+
+                conexion.commit()
+                flash("✅ Reserva anulada con éxito. El vehículo vuelve a estar disponible.", "info")
+            else:
+                flash("❌ Error: La reserva no existe o ya fue eliminada.", "warning")
+
+    except Exception as e:
+        print(f"⚠️ Error al anular reserva: {e}")
+        flash("Error interno al procesar la anulación.", "danger")
+    finally:
+        if conexion:
+            conexion.close()
+            
+    return redirect(url_for('gestion_flota'))
+
+######################################################################################################
 @app.route('/logout')
 def logout():
     session.pop('usuario', None)
     return redirect(url_for('login'))
-
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))  # Toma el puerto de la variable de entorno

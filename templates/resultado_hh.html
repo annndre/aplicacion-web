@@ -131,7 +131,7 @@
 </div>
 {% else %}
 <div style="margin-top: 20px; color: gray; font-style: italic; background-color: #e6f7ff; padding: 15px; border-radius: 5px;">
-    ℹ️ Selecciona un **Centro de Costo** o una **Especialidad** para comenzar a ver las estadísticas.
+    ℹ️ Selecciona un **Centro de Costo** y una **Especialidad** para comenzar a ver las estadísticas.
 </div>
 {% endif %}
 
@@ -152,17 +152,7 @@
     const especialidadSelect = document.getElementById('especialidad');
     const filtroMesInput = document.getElementById('filtro_mes');
 
-    function manejarFiltros() {
-        const centroValue = centroCostoSelect.value;
-        const especialidadValue = especialidadSelect.value;
-        if (centroValue && especialidadValue) {
-            if (event.target.id === 'centro_costo') {
-                especialidadSelect.selectedIndex = 0;
-            } else {
-                centroCostoSelect.selectedIndex = 0;
-            }
-        }
-    }
+    // Eliminamos manejarFiltros() para permitir la selección múltiple
 
     function mostrarFiltroFecha() {
         const checkedRadio = document.querySelector('input[name="tipo_filtro"]:checked');
@@ -179,6 +169,7 @@
     }
 
     function validarFiltros() {
+        // Ahora permitimos que se envíe con cualquiera de los dos o ambos
         if (!centroCostoSelect.value && !especialidadSelect.value) {
             alert("Por favor, selecciona al menos un filtro para ver resultados.");
             return false;

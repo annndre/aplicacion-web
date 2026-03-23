@@ -2,8 +2,10 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}JCM - Control{% endblock %}</title>
     <style>
+        /* --- ESTILOS BASE Y COMPUTADOR (CONSERVADOS) --- */
         body {
             font-family: Arial, sans-serif;
             margin: 0;
@@ -32,11 +34,13 @@
         .main-container {
             display: flex;
             flex: 1;
+            position: relative;
         }
         .main-nav {
             background-color: #2d2d2d;
             width: 220px;
             padding: 20px 10px;
+            flex-shrink: 0;
         }
         .main-nav a {
             display: block;
@@ -57,11 +61,7 @@
             background-color: white;
             overflow-y: auto;
         }
-        form label {
-            font-weight: bold;
-            margin-top: 10px;
-            display: block;
-        }
+        
         input, select, button {
             padding: 8px;
             width: calc(100% - 16px);
@@ -77,114 +77,164 @@
             font-weight: bold;
             border-radius: 5px;
         }
-        button:hover {
-            background-color: #ff8d42;
+        .nav-active {
+            background-color: #D45D00 !important;
+            color: white !important;
         }
-        .alert {
-            background-color: #ffdddd;
-            border: 1px solid #f44336;
-            padding: 8px;
-            margin: 5px 0;
-            border-radius: 5px;
-            list-style-type: none;
-        }
-        h2 {
-            border-bottom: 2px solid #666666;
-            padding-bottom: 5px;
-            margin-bottom: 15px;
-            font-size: 18px;
-            color: #333333;
-            text-align: center;
 
-        }
-        .btn-descarga-excel {
-            background-color: hsl(35, 20%, 40%);
+        /* --- ESTILOS PARA EL BOTÓN HAMBURGUESA --- */
+        .mobile-header {
+            display: none; 
+            background-color: #444444;
+            width: 100%;
+            padding: 10px 15px;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 1001;
+            box-sizing: border-box;
             color: white;
-            padding: 8px 14px;
+        }
+
+        .hamburger-btn {
+            background-color: #D45D00;
+            border: none;
+            width: 45px;
+            height: 40px;
             border-radius: 5px;
-            text-decoration: none;
-            font-weight: bold;
-            transition: background-color 0.3s ease;
-            display: inline-block;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            padding: 8px;
+            box-sizing: border-box;
         }
 
-        .btn-descarga-excel:hover {
-            background-color: #ff8d42;
+        .hamburger-btn span {
+            width: 100%;
+            height: 3px;
+            background-color: white;
+            border-radius: 2px;
         }
 
+        @media (max-width: 768px) {
+            .mobile-header {
+                display: flex;
+            }
+            .top-bar {
+                display: none;
+            }
+            .main-container {
+                flex-direction: column;
+            }
+            .main-nav {
+                display: none;
+                width: 100%;
+                position: absolute;
+                top: 0;
+                left: 0;
+                z-index: 1000;
+                padding: 10px;
+                box-sizing: border-box;
+                box-shadow: 0 10px 15px rgba(0,0,0,0.5);
+            }
+            .main-nav.show {
+                display: block; 
+            }
+            .main-nav a {
+                padding: 15px;
+                border-bottom: 1px solid #3d3d3d;
+            }
+            .container {
+                padding: 15px;
+            }
+            table {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+            input, select, button {
+                font-size: 16px;
+                padding: 12px;
+            }
+        }
     </style>
 </head>
 <body>
 
+<div class="mobile-header">
+    <button class="hamburger-btn" onclick="toggleMenu()">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+    <span style="font-weight: bold;">JCM - Menú</span>
+</div>
+
 <div class="top-bar">
-    <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo de la empresa" onerror="this.style.display='none';">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" onerror="this.style.display='none';">
     <h1>JCM - Control</h1>
 </div>
 
 <div class="main-container">
     <nav class="main-nav">
-        {% if session['rol'] == 'admin' %}
-            <a href="{{ url_for('asignar_personal') }}">🧑‍💼 Asignar Personal</a>
-            <a href="{{ url_for('registro_horas') }}">🕒 Registro HH</a>
-            <a href="{{ url_for('control_gastos') }}">💰 Control de Gastos</a>
-            <a href="{{ url_for('solicitudes') }}">📄 Solicitudes</a>
-            <a href="{{ url_for('devoluciones') }}">↩️ Devoluciones</a>
-            <a href="{{ url_for('entradas') }}">📥 Entradas</a>
-            <a href="{{ url_for('ver_inventario') }}">📦 Inventario</a>
-            <a href="{{ url_for('gestionar_centros_costo') }}">⚙️ Centros de Costo</a>
-            <a href="{{ url_for('adquisiciones') }}">📑 Adquisiciones</a>
-        {% elif session['rol'] == 'bodega' %}
-            <a href="{{ url_for('solicitudes') }}">📄 Solicitudes</a>
-            <a href="{{ url_for('devoluciones') }}">↩️ Devoluciones</a>
-            <a href="{{ url_for('entradas') }}">📥 Entradas</a>
-            <a href="{{ url_for('ver_inventario') }}">📦 Inventario</a>
-            <a href="{{ url_for('gestionar_centros_costo') }}">⚙️ Centros de Costo</a>
-            <a href="{{ url_for('adquisiciones') }}">📑 Adquisiciones</a>
-        {% elif session['rol'] == 'jefeT' %}
-            <a href="{{ url_for('asignar_personal') }}">🧑‍💼 Asignar Personal</a>
-            <a href="{{ url_for('control_gastos') }}">💰 Control de Gastos</a>
-            <a href="{{ url_for('ver_inventario') }}">📦 Inventario</a>
-            <a href="{{ url_for('registro_horas') }}">🕒 Registro HH</a>
-
-        {% elif session['rol'] == 'jefeB' %}
-            <a href="{{ url_for('solicitudes') }}">📄 Solicitudes</a>
-            <a href="{{ url_for('devoluciones') }}">↩️ Devoluciones</a>
-            <a href="{{ url_for('entradas') }}">📥 Entradas</a>
-            <a href="{{ url_for('ver_inventario') }}">📦 Inventario</a>
-            <a href="{{ url_for('gestionar_centros_costo') }}">⚙️ Centros de Costo</a>
-            <a href="{{ url_for('adquisiciones') }}">📑 Adquisiciones</a>
-            <a href="{{ url_for('registro_horas') }}">🕒 Registro HH</a>
-
+        {% if session['rol'] in ['admin', 'jefeT', 'jefeB'] %}
+            <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}nav-active{% endif %}">📊 Dashboard</a>
         {% endif %}
-        <a href="{{ url_for('resultado_hh') }}">📈 Resultados HH</a>
-        <a href="{{ url_for('logout') }}">🚪 Cerrar Sesión</a>
+
+        {% if session['rol'] in ['admin', 'jefeT', 'jefeB', 'supervisor'] %}
+            <a href="{{ url_for('gestion_flota') }}" class="{% if request.endpoint == 'gestion_flota' %}nav-active{% endif %}">🚚 Flota</a>
+        {% endif %}
+
+        <hr style="border: 0.5px solid #444; margin: 10px 0;">
+
+        {% if session['rol'] in ['admin', 'jefeT'] %}
+            <a href="{{ url_for('asignar_personal') }}" class="{% if request.endpoint == 'asignar_personal' %}nav-active{% endif %}">🧑‍💼 Personal</a>
+            <a href="{{ url_for('registro_horas') }}" class="{% if request.endpoint == 'registro_horas' %}nav-active{% endif %}">🕒 Registro HH</a>
+            <a href="{{ url_for('control_gastos') }}" class="{% if request.endpoint == 'control_gastos' %}nav-active{% endif %}">💰 Gastos</a>
+            <a href="{{ url_for('resultado_hh') }}" class="{% if request.endpoint == 'resultado_hh' %}nav-active{% endif %}">📈 Resultados HH</a>
+        {% endif %}
+
+        {% if session['rol'] in ['admin', 'jefeT', 'jefeB', 'bodega'] %}
+            <a href="{{ url_for('ver_inventario') }}" class="{% if request.endpoint == 'ver_inventario' %}nav-active{% endif %}">📦 Inventario</a>
+        {% endif %}
+
+        {% if session['rol'] in ['admin', 'jefeB', 'bodega'] %}
+            <a href="{{ url_for('solicitudes') }}" class="{% if request.endpoint == 'solicitudes' %}nav-active{% endif %}">📄 Solicitudes</a>
+            <a href="{{ url_for('devoluciones') }}" class="{% if request.endpoint == 'devoluciones' %}nav-active{% endif %}">↩️ Devoluciones</a>
+            <a href="{{ url_for('entradas') }}" class="{% if request.endpoint == 'entradas' %}nav-active{% endif %}">📥 Entradas</a>
+            <a href="{{ url_for('adquisiciones') }}" class="{% if request.endpoint == 'adquisiciones' %}nav-active{% endif %}">📑 Adquisiciones</a>
+        {% endif %}
+
+        {% if session['rol'] == 'admin' %}
+            <a href="{{ url_for('gestionar_centros_costo') }}" class="{% if request.endpoint == 'gestionar_centros_costo' %}nav-active{% endif %}">⚙️ C. Costo</a>
+        {% endif %}
+
+        {% if session['rol'] == 'conductor' %}
+            <a href="{{ url_for('inspeccion_vehiculo') }}" class="{% if request.endpoint == 'inspeccion_vehiculo' %}nav-active{% endif %}">📋 Inspección</a>
+        {% endif %}
+
+        <a href="{{ url_for('logout') }}" style="color: #ff8d42;">門 Salir</a>
     </nav>
 
     <div class="container">
-        <div class="flash-messages">
-            {% with messages = get_flashed_messages() %}
-                {% if messages %}
-                    <ul class="flashes">
-                        {% for message in messages %}
-                            <li class="alert">{{ message }}</li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
-            {% endwith %}
-        </div>
-
-            {% if mostrar_descarga and request.endpoint not in ['control_gastos', 'asignar_personal'] %}
-                <div style="text-align: right; margin-bottom: 10px;">
-                    <a href="{{ url_descarga }}" class="btn-descarga-excel">
-                        📥 Descargar Excel
-                    </a>
-                </div>
-            {% endif %}
-
-
         {% block content %}{% endblock %}
     </div>
 </div>
+
+<script>
+function toggleMenu() {
+    const nav = document.querySelector('.main-nav');
+    nav.classList.toggle('show');
+}
+
+document.querySelectorAll('.main-nav a').forEach(link => {
+    link.addEventListener('click', () => {
+        document.querySelector('.main-nav').classList.remove('show');
+    });
+});
+</script>
 
 </body>
 </html>
