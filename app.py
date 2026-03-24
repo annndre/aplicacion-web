@@ -1269,7 +1269,7 @@ def registro_horas():
                         FROM asignacion_personal a
                         JOIN personal p ON a.rut = p.rut
                         WHERE a.centro_costo = %s 
-                        AND (p.especialidad = %s OR p.rol = 'Prevencionista')
+                        AND (p.especialidad = %s OR p.rol IN ('Prevencionista', 'Ayudante General'))
                     """
                     cursor.execute(query_pers, (centro_costo, especialidad_jefe))
                 else:
@@ -1374,7 +1374,8 @@ def registro_horas():
                                 SELECT a.nombre, a.apellido, a.rut 
                                 FROM asignacion_personal a
                                 JOIN personal p ON a.rut = p.rut
-                                WHERE a.centro_costo = %s AND p.especialidad = %s
+                                WHERE a.centro_costo = %s 
+                                AND (p.especialidad = %s OR p.rol IN ('Prevencionista', 'Ayudante General'))
                                 ORDER BY a.nombre ASC
                             """, (centro_costo_actual, especialidad_jefe))
                         else:
