@@ -1262,16 +1262,10 @@ def registro_horas():
             mensaje_mostrado = False
             with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
                 
-                # --- MEJORA: FILTRADO POR ESPECIALIDAD ---
-                if rol_usuario == 'jefeT' and especialidad_jefe:
-                    query_pers = """
-                        SELECT a.rut, a.nombre, a.apellido 
-                        FROM asignacion_personal a
-                        JOIN personal p ON a.rut = p.rut
-                        WHERE a.centro_costo = %s 
-                        AND (p.especialidad = %s OR p.rol IN ('Prevencionista', 'Ayudante General'))
-                    """
-                    cursor.execute(query_pers, (centro_costo, especialidad_jefe))
+                # --- MEJORA: FILTRADO POR ESPECIALIDAD (SUSPENDIDO TEMPORALMENTE) ---
+                # Se ajusta para que jefeT vea a todo el personal del CC igual que admin
+                if (rol_usuario == 'jefeT' or rol_usuario == 'admin'):
+                    cursor.execute("SELECT rut, nombre, apellido FROM asignacion_personal WHERE centro_costo = %s", (centro_costo,))
                 else:
                     cursor.execute("SELECT rut, nombre, apellido FROM asignacion_personal WHERE centro_costo = %s", (centro_costo,))
                 
@@ -1368,16 +1362,10 @@ def registro_horas():
                         fechas_por_dia[d] = (primer_dia + timedelta(days=i)).strftime('%Y-%m-%d')
 
                     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                        # Visualización filtrada por Especialidad
-                        if rol_usuario == 'jefeT' and especialidad_jefe:
-                            cursor.execute("""
-                                SELECT a.nombre, a.apellido, a.rut 
-                                FROM asignacion_personal a
-                                JOIN personal p ON a.rut = p.rut
-                                WHERE a.centro_costo = %s 
-                                AND (p.especialidad = %s OR p.rol IN ('Prevencionista', 'Ayudante General'))
-                                ORDER BY a.nombre ASC
-                            """, (centro_costo_actual, especialidad_jefe))
+                        # Visualización filtrada por Especialidad (SUSPENDIDO TEMPORALMENTE)
+                        # Se ajusta para que jefeT vea a todo el personal del CC igual que admin
+                        if (rol_usuario == 'jefeT' or rol_usuario == 'admin'):
+                            cursor.execute("SELECT nombre, apellido, rut FROM asignacion_personal WHERE centro_costo = %s ORDER BY nombre ASC", (centro_costo_actual,))
                         else:
                             cursor.execute("SELECT nombre, apellido, rut FROM asignacion_personal WHERE centro_costo = %s ORDER BY nombre ASC", (centro_costo_actual,))
                         
@@ -1423,8 +1411,8 @@ def registro_horas():
                             centros_costo=centros_costo,
                             fechas_por_dia=fechas_por_dia,
                             resumen=resumen,
-                            valores_guardados=valores_guardados)    
-
+                            valores_guardados=valores_guardados)
+    
 #########################################################################################
 @app.route('/exportar_trabajador', methods=['POST'])
 def exportar_trabajador():
