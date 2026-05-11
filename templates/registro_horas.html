@@ -83,6 +83,12 @@
     <input type="hidden" name="guardar_semana" value="1">
     <input type="hidden" name="dia_a_guardar" id="dia_a_guardar">
 
+    <div class="d-flex justify-content-center mb-3">
+    <button type="submit" class="btn btn-warning btn-lg shadow" style="font-weight: bold; width: 60%;" onclick="return prepararEnvioSemanal()">
+        🚀 GUARDAR SEMANA COMPLETA (Lunes a Domingo)
+    </button>
+    </div> 
+
     <div class="table-responsive mt-4">
         <table class="table table-bordered">
             <thead class="table-light">
@@ -180,6 +186,22 @@
 {% endif %}
 
 <script>
+function prepararEnvioSemanal() {
+    if (confirm("¿Deseas guardar todos los registros ingresados de la semana?")) {
+        // 1. Marcamos el valor especial para Python
+        document.getElementById("dia_a_guardar").value = "todo";
+        
+        // 2. Habilitamos todos los inputs para que viajen en el POST
+        document.querySelectorAll('input.form-control').forEach(input => {
+            input.removeAttribute('readonly');
+            input.removeAttribute('disabled');
+            input.classList.remove('bloqueado');
+        });
+        return true;
+    }
+    return false;
+}
+
 function rellenarDia(dia, valor) {
     document.querySelectorAll('.hn_' + dia).forEach(input => {
         if (!input.disabled && !input.readOnly) input.value = valor;

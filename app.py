@@ -54,6 +54,7 @@ usuarios = {
     "M.PENA": {"password": "M.PENAJCM", "rol": "conductor", "rut": "19386784-7", "nombre": "Matias", "apellido": "Peña"},
     "F.CANCINO": {"password": "F.CANCINOJCM", "rol": "conductor", "rut": "17147358-6", "nombre": "Francisco", "apellido": "Cancino"},
     "F.OLIVOS": {"password": "F.OLIVOSJCM", "rol": "conductor", "rut": "7373331-6", "nombre": "Fernando", "apellido": "Olivos"},
+    "Irma": {"password": "IRMAJCM", "rol": "secretaria", "rut": "15585383-2", "nombre": "Irma", "apellido": "Orrego"},
 
 }
 
@@ -99,6 +100,7 @@ def login():
                     if session['rol'] in ['jefeT', 'jefeB', 'supervisor']: return redirect(url_for('gestion_flota'))
                     if session['rol'] == 'conductor': return redirect(url_for('inspeccion_vehiculo'))
                     if session['rol'] == 'bodega': return redirect(url_for('solicitudes'))
+                    if session['rol'] == 'secretaria': return redirect(url_for('remuneraciones'))
                     return redirect(url_for('resultado_hh'))
         except Exception as e:
             flash(f'Error crítico: {e}', 'danger')
@@ -1205,7 +1207,6 @@ def registro_horas():
     usuario_login = session.get('usuario')
     rut_usuario = session.get('rut')
     rol_usuario = session.get('rol')
-    # Especialidad obtenida durante el login (desde tabla jefe_especialidad)
     especialidad_jefe = session.get('especialidad_a_cargo')
 
     trabajadores = []
@@ -1228,120 +1229,102 @@ def registro_horas():
         if 'guardar_semana' in request.form:
             semana = request.form.get('semana', '').strip()
             centro_costo = request.form.get('centro_costo', '').strip()
+            dia_a_guardar = request.form.get('dia_a_guardar', '').strip().lower()
+
+            # --- DETERMINAR DÍAS A PROCESAR (INDIVIDUAL O SEMANAL) ---
+            if dia_a_guardar == 'todo':
+                lista_dias_proceso = ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'dom']
+            else:
+                lista_dias_proceso = [dia_a_guardar]
 
             if semana:
                 year, week = semana.split('-W')
                 primer_dia = datetime.fromisocalendar(int(year), int(week), 1)
-                dias = ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'dom']
-                for i, d in enumerate(dias):
+                dias_labels = ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'dom']
+                for i, d in enumerate(dias_labels):
                     fechas_por_dia[d] = (primer_dia + timedelta(days=i)).strftime('%Y-%m-%d')
-
-            dia_a_guardar = request.form.get('dia_a_guardar', '').strip().lower()
-            fecha_real = fechas_por_dia.get(dia_a_guardar)
-            hoy = date.today()
-
-            if not fecha_real:
-                flash("⚠️ Día no válido", "warning")
-                return redirect(url_for('registro_horas'))
-
-            # Validación de temporalidad (Semana actual y 4 anteriores)
-            fecha_real_dt = datetime.strptime(fecha_real, '%Y-%m-%d').date()
-            semana_actual_dt = hoy.isocalendar().week
-            semana_objetivo = fecha_real_dt.isocalendar().week
-            año_actual = hoy.isocalendar().year
-            año_objetivo = fecha_real_dt.isocalendar().year
-
-            #if año_actual != año_objetivo:
-            #    flash("⚠️ Solo se pueden editar semanas dentro del año actual.", "warning")
-            #    return redirect(url_for('registro_horas'))
-            
-            #if semana_objetivo < semana_actual_dt - 4 or fecha_real_dt > hoy:
-            #    flash("⚠️ Solo se pueden editar la semana actual y las 4 anteriores.", "warning")
-            #    return redirect(url_for('registro_horas'))
 
             mensaje_mostrado = False
             with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                
-                # --- MEJORA: FILTRADO POR ESPECIALIDAD (SUSPENDIDO TEMPORALMENTE) ---
-                # Se ajusta para que jefeT vea a todo el personal del CC igual que admin
-                if (rol_usuario == 'jefeT' or rol_usuario == 'admin'):
-                    cursor.execute("SELECT rut, nombre, apellido FROM asignacion_personal WHERE centro_costo = %s", (centro_costo,))
-                else:
-                    cursor.execute("SELECT rut, nombre, apellido FROM asignacion_personal WHERE centro_costo = %s", (centro_costo,))
-                
+                # Obtener el personal asignado al centro de costo
+                cursor.execute("SELECT rut, nombre, apellido FROM asignacion_personal WHERE centro_costo = %s", (centro_costo,))
                 personas = cursor.fetchall()
 
-                for persona in personas:
-                    rut = persona['rut'].strip()
-                    nombre = persona['nombre'].strip()
-                    apellido = persona['apellido'].strip()
-
-                    hn_key = f'hn_{rut}_{dia_a_guardar}'
-                    he_key = f'he_{rut}_{dia_a_guardar}'
-
-                    if hn_key not in request.form:
+                # BUCLE 1: Recorrer los días (ej: Solo lunes o de Lunes a Domingo)
+                for d_key in lista_dias_proceso:
+                    fecha_real = fechas_por_dia.get(d_key)
+                    if not fecha_real:
                         continue
+                    
+                    # BUCLE 2: Recorrer cada trabajador para el día actual del bucle
+                    for persona in personas:
+                        rut = persona['rut'].strip()
+                        nombre = persona['nombre'].strip()
+                        apellido = persona['apellido'].strip()
 
-                    hn_val = request.form.get(hn_key, '').strip().upper()
-                    he_val = request.form.get(he_key, '').strip()
-                    observacion = None
-                    observacionP = None
+                        hn_key = f'hn_{rut}_{d_key}'
+                        he_key = f'he_{rut}_{d_key}'
 
-                    try:
-                        # Manejo de estados (L, V, F, P, D)
-                        if hn_val in ['L', 'V', 'F', 'P', 'D']:
-                            horas_normales = 0
-                            observacion = hn_val
-                            if hn_val == 'P':
-                                tp = request.form.get(f'tipo_permiso_{rut}_{dia_a_guardar}', '').strip()
-                                rp = request.form.get(f'razon_permiso_{rut}_{dia_a_guardar}', '').strip()
-                                observacionP = f"{tp} - {rp}" if tp and rp else (tp or rp or None)
-                        elif hn_val == '':
-                            horas_normales = 0
-                        else:
-                            horas_normales = round(float(hn_val.replace(',', '.')), 1)
-                            if horas_normales < 0 or horas_normales > 24:
-                                flash(f"⚠️ Horas normales inválidas para {rut}", "warning")
-                                continue
+                        if hn_key not in request.form:
+                            continue
 
-                        # --- MEJORA: CONTROL CRÍTICO 9 HH TOTALES ---
-                        # Sumamos horas registradas en OTROS centros para el mismo día
-                        cursor.execute("""
-                            SELECT SUM(horas_normales)
-                            FROM registro_horas
-                            WHERE rut = %s AND horas_fecha = %s AND centro_costo != %s
-                        """, (rut, fecha_real, centro_costo))
-                        total_previas = cursor.fetchone()[0] or 0
+                        hn_val = request.form.get(hn_key, '').strip().upper()
+                        he_val = request.form.get(he_key, '').strip()
+                        observacion = None
+                        observacionP = None
 
-                        if (float(total_previas) + horas_normales) > 9.0:
-                            flash(f"🚨 BLOQUEO: {nombre} {apellido} ya registra {total_previas}h en otros centros. No se puede exceder el límite legal de 9h.", "danger")
-                            continue 
-                        # --- FIN MEJORA ---
+                        try:
+                            # Manejo de estados y horas normales
+                            if hn_val in ['L', 'V', 'F', 'P', 'D']:
+                                horas_normales = 0
+                                observacion = hn_val
+                                if hn_val == 'P':
+                                    tp = request.form.get(f'tipo_permiso_{rut}_{d_key}', '').strip()
+                                    rp = request.form.get(f'razon_permiso_{rut}_{d_key}', '').strip()
+                                    observacionP = f"{tp} - {rp}" if tp and rp else (tp or rp or None)
+                            elif hn_val == '':
+                                horas_normales = 0
+                            else:
+                                horas_normales = round(float(hn_val.replace(',', '.')), 1)
+                                if horas_normales < 0 or horas_normales > 24:
+                                    continue
 
-                        horas_extras = int(he_val) if he_val != '' else 0
-                        dias_trabajados = 1 if observacion == 'V' else round(horas_normales / 9, 1) if horas_normales else 0
-
-                        # Guardado o Actualización (Upsert)
-                        cursor.execute("SELECT 1 FROM registro_horas WHERE horas_fecha = %s AND centro_costo = %s AND rut = %s", (fecha_real, centro_costo, rut))
-                        if cursor.fetchone():
+                            # Control Crítico de 9 HH
                             cursor.execute("""
-                                UPDATE registro_horas SET horas_normales = %s, horas_extras = %s, observacion = %s, 
-                                observacionP = %s, dias_trabajados = %s, usuario = %s
-                                WHERE rut = %s AND horas_fecha = %s AND centro_costo = %s
-                            """, (horas_normales, horas_extras, observacion, observacionP, dias_trabajados, usuario_login, rut, fecha_real, centro_costo))
-                        else:
-                            cursor.execute("""
-                                INSERT INTO registro_horas (rut, nombre, apellido, centro_costo, horas_normales, horas_extras, 
-                                horas_fecha, fecha_registro, usuario, observacion, dias_trabajados, observacionP)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, %s, %s, %s, %s)
-                            """, (rut, nombre, apellido, centro_costo, horas_normales, horas_extras, fecha_real, usuario_login, observacion, dias_trabajados, observacionP))
+                                SELECT SUM(horas_normales)
+                                FROM registro_horas
+                                WHERE rut = %s AND horas_fecha = %s AND centro_costo != %s
+                            """, (rut, fecha_real, centro_costo))
+                            total_previas = cursor.fetchone()[0] or 0
 
-                        if not mensaje_mostrado:
-                            flash("✅ Horas procesadas correctamente.", "success")
-                            mensaje_mostrado = True
+                            if (float(total_previas) + horas_normales) > 9.0:
+                                flash(f"🚨 BLOQUEO: {nombre} {apellido} ya registra {total_previas}h en otros centros para el día {d_key}.", "danger")
+                                continue 
 
-                    except ValueError:
-                        flash(f"⚠️ Error en formato de horas para {rut}", "warning")
+                            horas_extras = int(he_val) if he_val != '' else 0
+                            dias_trabajados = 1 if observacion == 'V' else round(horas_normales / 9, 1) if horas_normales else 0
+
+                            # Guardado o Actualización (Upsert)
+                            cursor.execute("SELECT 1 FROM registro_horas WHERE horas_fecha = %s AND centro_costo = %s AND rut = %s", (fecha_real, centro_costo, rut))
+                            if cursor.fetchone():
+                                cursor.execute("""
+                                    UPDATE registro_horas SET horas_normales = %s, horas_extras = %s, observacion = %s, 
+                                    observacionP = %s, dias_trabajados = %s, usuario = %s
+                                    WHERE rut = %s AND horas_fecha = %s AND centro_costo = %s
+                                """, (horas_normales, horas_extras, observacion, observacionP, dias_trabajados, usuario_login, rut, fecha_real, centro_costo))
+                            else:
+                                cursor.execute("""
+                                    INSERT INTO registro_horas (rut, nombre, apellido, centro_costo, horas_normales, horas_extras, 
+                                    horas_fecha, fecha_registro, usuario, observacion, dias_trabajados, observacionP)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, %s, %s, %s, %s)
+                                """, (rut, nombre, apellido, centro_costo, horas_normales, horas_extras, fecha_real, usuario_login, observacion, dias_trabajados, observacionP))
+
+                            if not mensaje_mostrado:
+                                flash("✅ Registros procesados correctamente.", "success")
+                                mensaje_mostrado = True
+
+                        except ValueError:
+                            continue
 
             conexion.commit()
             return redirect(url_for('registro_horas'))
@@ -1362,16 +1345,9 @@ def registro_horas():
                         fechas_por_dia[d] = (primer_dia + timedelta(days=i)).strftime('%Y-%m-%d')
 
                     with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                        # Visualización filtrada por Especialidad (SUSPENDIDO TEMPORALMENTE)
-                        # Se ajusta para que jefeT vea a todo el personal del CC igual que admin
-                        if (rol_usuario == 'jefeT' or rol_usuario == 'admin'):
-                            cursor.execute("SELECT nombre, apellido, rut FROM asignacion_personal WHERE centro_costo = %s ORDER BY nombre ASC", (centro_costo_actual,))
-                        else:
-                            cursor.execute("SELECT nombre, apellido, rut FROM asignacion_personal WHERE centro_costo = %s ORDER BY nombre ASC", (centro_costo_actual,))
-                        
+                        cursor.execute("SELECT nombre, apellido, rut FROM asignacion_personal WHERE centro_costo = %s ORDER BY nombre ASC", (centro_costo_actual,))
                         trabajadores = cursor.fetchall()
 
-                        # Carga de registros guardados para poblar los inputs
                         cursor.execute("""
                             SELECT rut, horas_fecha, horas_normales, horas_extras, observacion
                             FROM registro_horas
@@ -1689,12 +1665,20 @@ def descargar_excel(tabla):
     output.seek(0)
     return send_file(output, download_name=nombre_archivo, as_attachment=True)
 
+##########################################################################################################
+#def limpiar_rut(rut):
+#    if not rut:
+#        return ""
+    # Quitamos puntos, guiones y espacios. Convertimos a mayúsculas para la 'K'.
+#    return str(rut).replace(".", "").replace("-", "").strip().upper()
+
+# Ejemplo de uso antes de pasar el parámetro a la base de datos:
+#rut_limpio = limpiar_rut(request.form.get('rut'))
+
 #####################################################################################################################################
 @app.route('/resultado_hh', methods=['GET', 'POST'])
 def resultado_hh():
-    # 1. Verificación de sesión y conexión
     if 'usuario' not in session:
-        flash("Debes iniciar sesión", "danger")
         return redirect(url_for('login'))
 
     conexion = obtener_conexion()
@@ -1702,107 +1686,209 @@ def resultado_hh():
     especialidades = []
     datos = []
     
-    # Inicialización de variables para el template
-    tipo_filtro = 'ninguno'
-    fecha_filtro = None
-    centro_costo_seleccionado = None
-    especialidad_seleccionada = None
+    # Captura segura de valores
+    tipo_filtro = request.form.get('tipo_filtro', 'ninguno')
+    fecha_filtro = request.form.get('fecha_filtro_mes') or request.form.get('fecha_filtro') # Asegúrate que coincida con el 'name' del HTML
+    centro_costo_sel = request.form.get('centro_costo')
+    especialidad_sel = request.form.get('especialidad')
 
     try:
-        # 2. Obtener listas de filtros disponibles
         with conexion.cursor() as cursor:
-            cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal ORDER BY centro_costo")
-            centros_costo = [fila[0] for fila in cursor.fetchall()]
+            # Mejora 1: Extracción segura de listas
+            cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal WHERE centro_costo IS NOT NULL ORDER BY centro_costo")
+            filas_cc = cursor.fetchall()
+            centros_costo = [str(f[0]) for f in filas_cc if f and len(f) > 0]
 
             cursor.execute("SELECT DISTINCT especialidad FROM personal WHERE especialidad IS NOT NULL ORDER BY especialidad")
-            especialidades = [fila[0] for fila in cursor.fetchall()]
-    except Exception as e:
-        flash(f"Error al cargar filtros: {e}", "danger")
-        return render_template('resultado_hh.html', centros_costo=[], especialidades=[])
+            filas_esp = cursor.fetchall()
+            especialidades = [str(f[0]) for f in filas_esp if f and len(f) > 0]
 
-    # 3. Manejo de la Solicitud POST (Filtro)
-    if request.method == 'POST':
-        tipo_filtro = request.form.get('tipo_filtro')
-        fecha_filtro = request.form.get('fecha_filtro')
-        centro_costo_seleccionado = request.form.get('centro_costo')
-        especialidad_seleccionada = request.form.get('especialidad')
+        if request.method == 'POST':
+            parametros_query = []
+            filtros_sql = ""
 
-        # --- A. Lógica para manejar filtros de fecha ---
-        condiciones_fecha = ""
-        parametros_query = []
+            if centro_costo_sel:
+                filtros_sql += " AND rh.centro_costo = %s"
+                parametros_query.append(centro_costo_sel)
 
-        if tipo_filtro and tipo_filtro != 'ninguno' and fecha_filtro:
-            try:
-                if tipo_filtro == 'semana':
-                    anio, semana_num = map(int, fecha_filtro.split('-W'))
-                    primer_dia = datetime.date.fromisocalendar(anio, semana_num, 1)
-                    ultimo_dia = primer_dia + datetime.timedelta(days=6)
-                    condiciones_fecha = "AND rh.horas_fecha BETWEEN %s AND %s"
-                    parametros_query.extend([primer_dia, ultimo_dia])
-                elif tipo_filtro == 'mes':
-                    anio, mes = map(int, fecha_filtro.split('-'))
-                    condiciones_fecha = "AND EXTRACT(YEAR FROM rh.horas_fecha) = %s AND EXTRACT(MONTH FROM rh.horas_fecha) = %s"
-                    parametros_query.extend([anio, mes])
-            except ValueError:
-                flash("Formato de fecha inválido.", "warning")
-                return redirect(url_for('resultado_hh'))
+            if especialidad_sel:
+                filtros_sql += " AND p.especialidad = %s"
+                parametros_query.append(especialidad_sel)
 
-        # --- B. Ejecución de la Consulta con Filtros Dinámicos Combinados ---
-        try:
+            # Mejora 2: Validación estricta de fecha para evitar el 'Index out of range'
+            if tipo_filtro == 'mes' and fecha_filtro:
+                partes_fecha = fecha_filtro.split('-')
+                if len(partes_fecha) == 2:
+                    try:
+                        anio, mes = map(int, partes_fecha)
+                        filtros_sql += " AND EXTRACT(YEAR FROM rh.horas_fecha) = %s AND EXTRACT(MONTH FROM rh.horas_fecha) = %s"
+                        parametros_query.extend([anio, mes])
+                    except ValueError:
+                        flash("Cifras de fecha no válidas", "warning")
+
+# Considerar la siguiente función rescatada del bloque "with":
+# Version 1 (Funciona, pero deja excluyente a los rut que "inician con cero por falta de dígito")
+# FactorCalculado AS (
+#                        SELECT 
+#                            htm.rut, htm.mes_ref, htm.total_hn_mes,
+#                            rc.total_haberes
+#                        FROM HorasTotalesMensuales htm
+#                        INNER JOIN remuneraciones_cargadas rc ON htm.rut = rc.rut AND htm.mes_ref = rc.mes_devengo
+#                    )
+
+# Version 2: (Soluciona conflicto anterior, pero deja algunos sin valor Costo/Hora)
+# FactorCalculado AS (
+#                        SELECT
+#                            htm.rut, htm.mes_ref, htm.total_hn_mes,
+#                            rc.total_haberes
+#                        FROM HorasTotalesMensuales htm
+#                        INNER JOIN remuneraciones_cargadas rc ON
+#                            -- MEJORA: Normalizamos ambos lados para que '09876543-2' sea igual a '9876543-2'
+#                            LTRIM(REPLACE(REPLACE(htm.rut, '.', ''), '-', ''), '0') = 
+#                            LTRIM(REPLACE(REPLACE(rc.rut, '.', ''), '-', ''), '0')
+#                        AND htm.mes_ref = rc.mes_devengo
+#                    )
+
+# Version 3: (No soluciona nada, presenta conflicto de ambos casos)
+# FactorCalculado AS (
+#                        SELECT
+#                            htm.rut, htm.mes_ref, htm.total_hn_mes,
+#                            rc.total_haberes
+#                        FROM HorasTotalesMensuales htm
+#                        INNER JOIN remuneraciones_cargadas rc ON
+#                            -- NORMALIZACIÓN TOTAL:
+#                            -- 1. Quitamos puntos y guiones.
+#                            -- 2. Pasamos a MAYÚSCULAS (por si hay RUT con 'k').
+#                            -- 3. Quitamos espacios (TRIM).
+#                            -- 4. Quitamos ceros a la izquierda (LTRIM).
+#                            LTRIM(UPPER(TRIM(REPLACE(REPLACE(htm.rut, '.', ''), '-', ''))), '0') = 
+#                            LTRIM(UPPER(TRIM(REPLACE(REPLACE(rc.rut, '.', ''), '-', ''))), '0')
+#                        AND htm.mes_ref = rc.mes_devengo
+#                    )
+
+# Version 4: (es lo que está en código ahora, caso excluyente de Daniel Mena rut: 16266257-0 -> revisar)
+
+# FactorCalculado AS (
+#                        SELECT 
+#                            htm.rut, htm.mes_ref, htm.total_hn_mes,
+#                            rc.total_haberes
+#                        FROM HorasTotalesMensuales htm
+#                        INNER JOIN remuneraciones_cargadas rc ON 
+#                            -- 1. Quitamos puntos y guiones de ambos lados
+#                            -- 2. Quitamos ceros a la izquierda de ambos lados con LTRIM
+#                            -- 3. Quitamos espacios en blanco con TRIM
+#                            LTRIM(REPLACE(REPLACE(TRIM(htm.rut), '.', ''), '-', ''), '0') = 
+#                            LTRIM(REPLACE(REPLACE(TRIM(rc.rut), '.', ''), '-', ''), '0')
+#                        AND htm.mes_ref = rc.mes_devengo
+#                    )
+
+# Version 5: 
+
+# FactorCalculado AS (
+#                        SELECT 
+#                            htm.rut, htm.mes_ref, htm.total_hn_mes,
+#                            rc.total_haberes
+#                        FROM HorasTotalesMensuales htm
+#                        INNER JOIN remuneraciones_cargadas rc ON 
+#                            -- PASO 1: Quitamos puntos y espacios, y pasamos a Mayúsculas (por si hay 'K')
+#                            -- PASO 2: LTRIM solo actúa sobre el inicio de la cadena, manteniendo ceros al final.
+#                            -- PASO 3: Reemplazamos el guion al final para comparar solo el valor alfanumérico.
+#                            REPLACE(LTRIM(UPPER(TRIM(REPLACE(htm.rut, '.', ''))), '0'), '-', '') = 
+#                            REPLACE(LTRIM(UPPER(TRIM(REPLACE(rc.rut, '.', ''))), '0'), '-', '')
+#                        AND htm.mes_ref = rc.mes_devengo
+#                    )
+
+# Version 6: 
+
+# FactorCalculado AS (
+#                        SELECT 
+#                            htm.rut, htm.mes_ref, htm.total_hn_mes,
+#                            rc.total_haberes
+#                        FROM HorasTotalesMensuales htm
+#                        INNER JOIN remuneraciones_cargadas rc ON 
+#                            -- Comparamos los RUTs eliminando solo la "basura" visual (puntos y guiones)
+#                            -- Usamos UPPER por si el dígito verificador es 'K'
+#                            UPPER(REPLACE(REPLACE(TRIM(htm.rut), '.', ''), '-', '')) = 
+#                            UPPER(REPLACE(REPLACE(TRIM(rc.rut), '.', ''), '-', ''))
+#                        AND htm.mes_ref = rc.mes_devengo
+#                    )
+
+# Version 7: 
+
+# FactorCalculado AS (
+#                        SELECT 
+#                            htm.rut, htm.mes_ref, htm.total_hn_mes,
+#                            rc.total_haberes
+#                        FROM HorasTotalesMensuales htm
+#                        INNER JOIN remuneraciones_cargadas rc ON 
+#                            -- REGEX: Extraemos solo dígitos y la letra K de ambos lados
+#                            -- Esto iguala '07.996.375-5', '79963755' y '7.996.375-5' automáticamente
+#                            regexp_replace(UPPER(htm.rut), '[^0-9K]', '', 'g') = 
+#                            regexp_replace(UPPER(rc.rut), '[^0-9K]', '', 'g')
+#                        AND htm.mes_ref = rc.mes_devengo
+#                    )
+                    
             with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                # Base de la query: Siempre unimos Personal con Registro_Horas
-                # El WHERE 1=1 permite añadir condiciones dinámicamente
                 query = f"""
-                    SELECT p.nombre, p.apellido, p.rut, p.pago_hora,
-                        COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) AS total_hn,
-                        COALESCE(SUM(CASE WHEN rh.horas_extras > 0 THEN rh.horas_extras ELSE 0 END), 0) AS total_he,
-                        COALESCE(COUNT(DISTINCT rh.horas_fecha) FILTER (WHERE rh.horas_normales > 0 OR rh.horas_extras > 0), 0) AS dias_trabajados,
-                        COUNT(*) FILTER (WHERE rh.observacion ILIKE 'L') AS licencias,
-                        COUNT(*) FILTER (WHERE rh.observacion ILIKE 'P') AS permisos,
-                        COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas,
+                    WITH HorasTotalesMensuales AS (
+                        SELECT rut, DATE_TRUNC('month', horas_fecha) as mes_ref, SUM(horas_normales) as total_hn_mes
+                        FROM registro_horas
+                        GROUP BY rut, DATE_TRUNC('month', horas_fecha)
+                    ),
+                    FactorCalculado AS (
+                        SELECT 
+                            htm.rut, htm.mes_ref, htm.total_hn_mes,
+                            rc.total_haberes
+                        FROM HorasTotalesMensuales htm
+                        -- Cambiamos INNER JOIN por LEFT JOIN para identificar a quienes no tienen sueldo
+                        -- pero para el cálculo final, la lógica de unión es la que corregimos:
+                        INNER JOIN remuneraciones_cargadas rc ON 
+                            -- NORMALIZACIÓN DEFINITIVA:
+                            -- 1. regexp_replace elimina todo lo que no sea número (puntos, guiones, espacios, letras)
+                            -- 2. Al convertir a BIGINT, la base de datos ignora automáticamente los ceros a la izquierda
+                            --    sin riesgo de borrar ceros que van al final o al medio.
+                            CAST(NULLIF(regexp_replace(htm.rut, '[^0-9]', '', 'g'), '') AS BIGINT) = 
+                            CAST(NULLIF(regexp_replace(rc.rut, '[^0-9]', '', 'g'), '') AS BIGINT)
+                        AND htm.mes_ref = rc.mes_devengo
+                    )
+                    SELECT 
+                        p.nombre, p.apellido, p.rut,
+                        SUM(rh.horas_normales) as total_hn,
+                        (SUM(rh.horas_normales) / GREATEST(NULLIF(MAX(htm.total_hn_mes), 0), 168)) as factor_horas,
+                        (MAX(fc.total_haberes) / GREATEST(NULLIF(MAX(htm.total_hn_mes), 0), 168)) as pago_hora_real,
+                        (SUM(rh.horas_normales) * (MAX(fc.total_haberes) / GREATEST(NULLIF(MAX(htm.total_hn_mes), 0), 168))) as monto_a_pagar,
+                        COALESCE(COUNT(DISTINCT rh.horas_fecha) FILTER (WHERE rh.horas_normales > 0), 0) AS dias_trabajados,
                         COUNT(*) FILTER (WHERE rh.observacion ILIKE 'V') AS vacaciones,
-                        (COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) * p.pago_hora) AS monto_a_pagar
+                        COUNT(*) FILTER (WHERE rh.observacion ILIKE 'P') AS permisos,
+                        COUNT(*) FILTER (WHERE rh.observacion ILIKE 'L') AS licencias,
+                        COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas
                     FROM personal p
-                    LEFT JOIN registro_horas rh ON p.rut = rh.rut
-                    WHERE 1=1
+                    INNER JOIN registro_horas rh ON p.rut = rh.rut
+                    LEFT JOIN HorasTotalesMensuales htm ON rh.rut = htm.rut AND DATE_TRUNC('month', rh.horas_fecha) = htm.mes_ref
+                    LEFT JOIN FactorCalculado fc ON rh.rut = fc.rut AND DATE_TRUNC('month', rh.horas_fecha) = fc.mes_ref
+                    WHERE 1=1 {filtros_sql}
+                    GROUP BY p.nombre, p.apellido, p.rut
+                    ORDER BY p.apellido, p.nombre
                 """
-
-                # Filtro combinable 1: Centro de Costo
-                if centro_costo_seleccionado:
-                    query += " AND rh.centro_costo = %s"
-                    parametros_query.append(centro_costo_seleccionado)
-
-                # Filtro combinable 2: Especialidad
-                if especialidad_seleccionada:
-                    query += " AND p.especialidad = %s"
-                    parametros_query.append(especialidad_seleccionada)
-
-                # Aplicar condiciones de fecha si existen
-                if condiciones_fecha:
-                    query += f" {condiciones_fecha}"
-
-                # Agrupación y orden
-                query += " GROUP BY p.nombre, p.apellido, p.rut, p.pago_hora ORDER BY p.apellido, p.nombre"
-                
                 cursor.execute(query, parametros_query)
                 datos = cursor.fetchall()
-
-        except Exception as e:
-            flash(f"Error al ejecutar la consulta SQL: {e}", "danger")
-            datos = []
-        finally:
+    
+    except Exception as e:
+        flash(f"Error en consulta: {str(e)}", "danger")
+        # No redirigimos al login, nos quedamos aquí
+    finally:
+        if conexion:
             conexion.close()
 
-    # 4. Renderizar el template con los filtros persistidos
-    return render_template('resultado_hh.html',
-                           centros_costo=centros_costo,
-                           especialidades=especialidades,
-                           centro_seleccionado=centro_costo_seleccionado,
-                           especialidad_seleccionada=especialidad_seleccionada,
+    return render_template('resultado_hh.html', 
+                           centros_costo=centros_costo, 
+                           especialidades=especialidades, 
+                           datos=datos,
+                           centro_seleccionado=centro_costo_sel,
+                           especialidad_seleccionada=especialidad_sel,
                            tipo_filtro=tipo_filtro,
-                           fecha_filtro=fecha_filtro,
-                           datos=datos)
-    
+                           fecha_filtro=fecha_filtro)
+                        
 ######################################
 
 @app.route('/exportar_resultado_hh_excel', methods=['POST'])
@@ -1852,34 +1938,48 @@ def exportar_resultado_hh_excel():
     conexion = obtener_conexion()
     try:
         with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-            # Columnas seleccionadas (Incluyendo Desvinculados 'D')
-            select_columns = """
-                p.nombre, p.apellido, p.rut, p.pago_hora,
-                COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) AS total_hn,
-                COALESCE(SUM(CASE WHEN rh.horas_extras > 0 THEN rh.horas_extras ELSE 0 END), 0) AS total_he,
-                COALESCE(COUNT(DISTINCT rh.horas_fecha) FILTER (WHERE rh.horas_normales > 0 OR rh.horas_extras > 0), 0) AS dias_trabajados,
-                COUNT(*) FILTER (WHERE rh.observacion ILIKE 'L') AS licencias,
-                COUNT(*) FILTER (WHERE rh.observacion ILIKE 'P') AS permisos,
-                COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas,
-                COUNT(*) FILTER (WHERE rh.observacion ILIKE 'V') AS vacaciones,
-                COUNT(*) FILTER (WHERE rh.observacion ILIKE 'D') AS desvinculados,
-                (COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) * p.pago_hora) AS monto_a_pagar
-            """
-
-            # Construcción final de la Query
+            # CTE para el cálculo del costo_hora real sincronizado
             query = f"""
-                SELECT {select_columns}
+                WITH HorasTotalesMensuales AS (
+                    SELECT rut, DATE_TRUNC('month', horas_fecha) as mes_ref, SUM(horas_normales) as total_hn_mes
+                    FROM registro_horas
+                    GROUP BY rut, DATE_TRUNC('month', horas_fecha)
+                ),
+                FactorCalculado AS (
+                    SELECT 
+                        htm.rut, htm.mes_ref, htm.total_hn_mes,
+                        rc.total_haberes
+                    FROM HorasTotalesMensuales htm
+                    INNER JOIN remuneraciones_cargadas rc ON 
+                        LTRIM(regexp_replace(UPPER(htm.rut), '[^0-9K]', '', 'g'), '0') = 
+                        LTRIM(regexp_replace(UPPER(rc.rut), '[^0-9K]', '', 'g'), '0')
+                    AND htm.mes_ref = rc.mes_devengo
+                )
+                SELECT 
+                    p.nombre, p.apellido, p.rut,
+                    (MAX(fc.total_haberes) / GREATEST(NULLIF(MAX(htm.total_hn_mes), 0), 168)) as costo_hora,
+                    COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) AS total_hn,
+                    COALESCE(SUM(CASE WHEN rh.horas_extras > 0 THEN rh.horas_extras ELSE 0 END), 0) AS total_he,
+                    COALESCE(COUNT(DISTINCT rh.horas_fecha) FILTER (WHERE rh.horas_normales > 0 OR rh.horas_extras > 0), 0) AS dias_trabajados,
+                    COUNT(*) FILTER (WHERE rh.observacion ILIKE 'L') AS licencias,
+                    COUNT(*) FILTER (WHERE rh.observacion ILIKE 'P') AS permisos,
+                    COUNT(*) FILTER (WHERE rh.observacion ILIKE 'F') AS fallas,
+                    COUNT(*) FILTER (WHERE rh.observacion ILIKE 'V') AS vacaciones,
+                    COUNT(*) FILTER (WHERE rh.observacion ILIKE 'D') AS desvinculados,
+                    (COALESCE(SUM(CASE WHEN rh.horas_normales > 0 THEN rh.horas_normales ELSE 0 END), 0) * (MAX(fc.total_haberes) / GREATEST(NULLIF(MAX(htm.total_hn_mes), 0), 168))) AS monto_a_pagar
                 FROM personal p
                 LEFT JOIN registro_horas rh ON p.rut = rh.rut
+                LEFT JOIN HorasTotalesMensuales htm ON rh.rut = htm.rut AND DATE_TRUNC('month', rh.horas_fecha) = htm.mes_ref
+                LEFT JOIN FactorCalculado fc ON rh.rut = fc.rut AND DATE_TRUNC('month', rh.horas_fecha) = fc.mes_ref
                 {condiciones_sql}
-                GROUP BY p.nombre, p.apellido, p.rut, p.pago_hora
+                GROUP BY p.nombre, p.apellido, p.rut
                 ORDER BY p.apellido, p.nombre
             """
             
             cursor.execute(query, parametros)
             datos = cursor.fetchall()
             columnas = [desc.name for desc in cursor.description]
-            
+
     except Exception as e:
         print(f"Error en exportación Excel: {e}")
         return redirect(url_for('resultado_hh'))
@@ -1894,14 +1994,14 @@ def exportar_resultado_hh_excel():
     df = df.fillna(0)
 
     df.rename(columns={
-        'nombre': 'Nombre', 'apellido': 'Apellido', 'rut': 'RUT', 'pago_hora': 'Pago por Hora',
+        'nombre': 'Nombre', 'apellido': 'Apellido', 'rut': 'RUT', 'costo_hora': 'Costo por Hora',
         'total_hn': 'Total Horas Normales', 'total_he': 'Total Horas Extras',
         'dias_trabajados': 'Días con Horas Registradas', 'licencias': 'Licencias',
         'permisos': 'Permisos', 'fallas': 'Fallas', 'vacaciones': 'Vacaciones',
         'desvinculados': 'Desvinculados', 'monto_a_pagar': 'Monto a Pagar (HN)'
     }, inplace=True)
 
-    for col in ['Pago por Hora', 'Total Horas Normales', 'Total Horas Extras', 'Monto a Pagar (HN)']:
+    for col in ['Costo por Hora', 'Total Horas Normales', 'Total Horas Extras', 'Monto a Pagar (HN)']:
         if col in df.columns: df[col] = df[col].round(1)
 
     # --- 3. DISEÑO PROFESIONAL CON XLSXWRITER ---
@@ -1966,6 +2066,10 @@ def dashboard():
     consumos_centro = [] 
     asistencia = {}
     estados = {'op': 0, 'def': 0, 'no_op': 0}
+    
+    # Variables para la nueva mejora de gastos combinados
+    gasto_inventario_total = 0
+    gasto_personal_total = 0
 
     try:
         with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
@@ -1975,7 +2079,7 @@ def dashboard():
 
             # 3. Lógica para el Administrador
             if rol == 'admin':
-                # --- MEJORA APLICADA: Gastos por Categoría Filtrados ---
+                # --- MEJORA APLICADA: Gastos por Categoría e Inventario Total ---
                 query_gastos = "SELECT categoria, SUM(monto_registro) as total FROM registro_costos WHERE 1=1"
                 params_gastos = []
 
@@ -1990,6 +2094,42 @@ def dashboard():
                 query_gastos += " GROUP BY categoria"
                 cursor.execute(query_gastos, params_gastos)
                 datos_gastos = cursor.fetchall()
+                
+                # Calculamos el total de inventario para la tarjeta
+                gasto_inventario_total = sum(row['total'] for row in datos_gastos) if datos_gastos else 0
+
+                # --- MEJORA APLICADA: Cálculo de Gasto de Personal (HH Reales) ---
+                # Esta query replica la lógica de Resultados HH para obtener el costo real
+                query_personal = """
+                    WITH HorasTotalesMensuales AS (
+                        SELECT rut, DATE_TRUNC('month', horas_fecha) as mes_ref, SUM(horas_normales) as total_hn_mes
+                        FROM registro_horas
+                        GROUP BY rut, DATE_TRUNC('month', horas_fecha)
+                    ),
+                    ValorHoraReal AS (
+                        SELECT htm.rut, htm.mes_ref, 
+                               (rc.total_haberes / NULLIF(htm.total_hn_mes, 0)) as pago_real_calculado
+                        FROM HorasTotalesMensuales htm
+                        INNER JOIN remuneraciones_cargadas rc ON htm.rut = rc.rut AND htm.mes_ref = rc.mes_devengo
+                    )
+                    SELECT SUM(rh.horas_normales * COALESCE(vhr.pago_real_calculado, p.pago_hora)) as total_personal
+                    FROM registro_horas rh
+                    JOIN personal p ON rh.rut = p.rut
+                    LEFT JOIN ValorHoraReal vhr ON rh.rut = vhr.rut 
+                         AND vhr.mes_ref = DATE_TRUNC('month', rh.horas_fecha)
+                    WHERE 1=1
+                """
+                params_pers = []
+                if centro_filtro:
+                    query_personal += " AND rh.centro_costo = %s"
+                    params_pers.append(centro_filtro)
+                if fecha_desde and fecha_hasta:
+                    query_personal += " AND rh.horas_fecha BETWEEN %s AND %s"
+                    params_pers.extend([fecha_desde, fecha_hasta])
+
+                cursor.execute(query_personal, params_pers)
+                res_pers = cursor.fetchone()
+                gasto_personal_total = float(res_pers['total_personal']) if res_pers and res_pers['total_personal'] else 0
 
                 # Gráfico Horizontal Unificado (Consumos)
                 query_consumo = """
@@ -2050,20 +2190,23 @@ def dashboard():
         if conexion:
             conexion.close()
 
-    # 4. Retorno de plantilla con variables sincronizadas
+    # 4. Retorno de plantilla con variables sincronizadas (incluyendo las nuevas variables de gastos)
     return render_template('dashboard.html', 
-                           centros=centros, 
-                           gastos_cat=datos_gastos, 
-                           evolucion=evolucion_gastos,
-                           inventario=inventario_datos, 
-                           consumos_centro=consumos_centro, 
-                           centro_sel=centro_filtro, 
-                           fecha_desde=fecha_desde,
-                           fecha_hasta=fecha_hasta,
-                           asistencia=asistencia,
-                           estados=estados, 
-                           rol=rol)
-                                        
+                            centros=centros, 
+                            gastos_cat=datos_gastos, 
+                            evolucion=evolucion_gastos,
+                            inventario=inventario_datos, 
+                            consumos_centro=consumos_centro, 
+                            centro_sel=centro_filtro, 
+                            fecha_desde=fecha_desde,
+                            fecha_hasta=fecha_hasta,
+                            asistencia=asistencia,
+                            estados=estados, 
+                            rol=rol,
+                            total_general=(gasto_inventario_total + gasto_personal_total),
+                            gastos_inv=gasto_inventario_total,
+                            gastos_pers=gasto_personal_total)
+                                            
 #####################################################
 # --- MÓDULO 2: GESTIÓN DE FLOTA (Módulo Nuevo y Autónomo) ---
 
@@ -2086,12 +2229,12 @@ def gestion_flota():
 
     vehiculos = []
     reservas = []
+    centros_costo = [] # <-- VARIABLE PARA SINCRONIZACIÓN
     
     conexion = obtener_conexion()
     try:
         with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             # AJUSTE SQL: Seleccionamos v.* para obtener 'persona_a_cargo_rut' directamente
-            # No necesitamos el JOIN con usuarios aquí porque el mapeo lo hace Python con el diccionario
             cursor.execute("""
                 SELECT * FROM vehiculos_empresa 
                 ORDER BY patente
@@ -2108,9 +2251,6 @@ def gestion_flota():
                 if rut_a_cargo:
                     # Llamamos a tu función robusta (la que limpia espacios y mayúsculas)
                     nombre, apellido = obtener_datos_por_rut(rut_a_cargo)
-                    
-                    # Si la función no lo encuentra en el diccionario, mostrará "RUT: XXXXX (No Mapeado)"
-                    # Si lo encuentra, mostrará el nombre real
                     vehiculo_dict['nombre_responsable_amigable'] = f"{nombre} {apellido}"
                 else:
                     vehiculo_dict['nombre_responsable_amigable'] = "Sin asignar"
@@ -2124,6 +2264,11 @@ def gestion_flota():
                 JOIN vehiculos_empresa v ON r.vehiculo_id = v.id
             """)
             reservas = cursor.fetchall()
+
+            # --- NUEVO: Obtener Centros de Costo para el formulario de solicitud ---
+            # Esto permite que el selector en gestion_flota.html funcione correctamente
+            cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal ORDER BY centro_costo")
+            centros_costo = [row[0] for row in cursor.fetchall()]
             
     except Exception as e:
         print(f"⚠️ Error en carga de flota: {e}")
@@ -2132,8 +2277,12 @@ def gestion_flota():
         if conexion:
             conexion.close()
             
-    return render_template('gestion_flota.html', vehiculos=vehiculos, reservas=reservas)
-
+    # Se añade centros_costo al render_template para sincronizar con el formulario
+    return render_template('gestion_flota.html', 
+                           vehiculos=vehiculos, 
+                           reservas=reservas, 
+                           centros_costo=centros_costo)
+    
 ###################################################################
 @app.route('/solicitar_vehiculo', methods=['POST'])
 def solicitar_vehiculo():
@@ -2145,6 +2294,7 @@ def solicitar_vehiculo():
     f_inicio_raw = request.form.get('fecha_inicio')
     f_fin_raw = request.form.get('fecha_fin')
     tipo_evento = request.form.get('tipo_evento')
+    centro_costo = request.form.get('centro_costo')  # <--- NUEVO: Captura el CC del formulario
     por_hora = request.form.get('reserva_por_hora') # Captura el checkbox del HTML
     solicitante_rut = session.get('rut')
 
@@ -2186,11 +2336,11 @@ def solicitar_vehiculo():
                 flash(msg, "danger")
                 return redirect(url_for('gestion_flota'))
 
-            # 4. Inserción de la Reserva
+            # 4. Inserción de la Reserva (Incluyendo el Centro de Costo)
             cursor.execute("""
-                INSERT INTO reservas_vehiculos (vehiculo_id, solicitante_rut, fecha_inicio, fecha_fin, tipo_evento)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (vehiculo_id, solicitante_rut, fecha_inicio, fecha_fin, tipo_evento))
+                INSERT INTO reservas_vehiculos (vehiculo_id, solicitante_rut, fecha_inicio, fecha_fin, tipo_evento, centro_costo)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (vehiculo_id, solicitante_rut, fecha_inicio, fecha_fin, tipo_evento, centro_costo))
             
             conexion.commit()
             flash("✅ Reserva registrada exitosamente.", "success")
@@ -2221,13 +2371,14 @@ def api_auditoria_vehiculo(vehiculo_id):
     try:
         with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
             # 3. Consulta SQL con JOINs para traer Reservas + Inspecciones
-            # Usamos alias para 'estado_vehiculo' como solicitaste
+            # SE AÑADE: r.centro_costo a la selección
             query = """
                 SELECT 
                     r.solicitante_rut, 
                     r.fecha_inicio, 
                     r.fecha_fin, 
                     r.tipo_evento AS motivo,
+                    r.centro_costo,
                     i.estado_vehiculo, 
                     i.observaciones AS detalle_tecnico,
                     v.patente
@@ -2259,6 +2410,7 @@ def api_auditoria_vehiculo(vehiculo_id):
                     'rut': row['solicitante_rut'],
                     'fecha_solicitud': row['fecha_inicio'].strftime('%d/%m/%Y'),
                     'periodo': f"{row['fecha_inicio'].strftime('%d/%m/%Y')} al {row['fecha_fin'].strftime('%d/%m/%Y')}",
+                    'centro_costo': row['centro_costo'] or "N/A", # <--- INTEGRACIÓN DEL NUEVO CAMPO
                     'motivo': row['motivo'],
                     'estado_final': row['estado_vehiculo'] or "Sin reporte",
                     'detalle': row['detalle_tecnico'] or "Sin observaciones",
@@ -2281,51 +2433,63 @@ def inspeccion_vehiculo():
     if 'usuario' not in session:
         return redirect(url_for('login'))
 
-    # Inicialización para evitar UnboundLocalError
-    vehiculos = []
     conexion = obtener_conexion()
-    
-    try:
-        with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-            if request.method == 'POST':
-                # 1. Captura de datos
-                vehiculo_id = request.form.get('vehiculo_id')
-                kilometraje = request.form.get('kilometraje')
-                estado_vehiculo = request.form.get('estado_vehiculo')
-                observaciones = request.form.get('observaciones')
-                rut_inspector = session.get('rut')
+    cursor = conexion.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-                # 2. Registro en tabla de inspecciones
-                cursor.execute("""
-                    INSERT INTO inspecciones_flota (vehiculo_id, rut_inspector, kilometraje, estado_vehiculo, observaciones, fecha)
-                    VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                """, (vehiculo_id, rut_inspector, kilometraje, estado_vehiculo, observaciones))
-                
-                # 3. MEJORA INDUSTRIAL: Actualización automática de kilometraje en la tabla maestra
-                # Esto permite tener el dato siempre actualizado para alertas de mantenimiento
-                cursor.execute("""
-                    UPDATE vehiculos_empresa 
-                    SET kilometraje_actual = %s 
-                    WHERE id = %s
-                """, (kilometraje, vehiculo_id))
-                
-                conexion.commit()
-                flash("✅ Inspección técnica registrada. Kilometraje actualizado en sistema.", "success")
-                return redirect(url_for('gestion_flota')) # Redirección alineada al módulo de flota
+    if request.method == 'POST':
+        # 1. CAPTURA DE DATOS DEL FORMULARIO
+        # Aquí recibimos el "centro_costo" que añadimos al HTML
+        vehiculo_id = request.form.get('vehiculo_id')
+        kilometraje = request.form.get('kilometraje')
+        estado_vehiculo = request.form.get('estado_vehiculo')
+        observaciones = request.form.get('observaciones')
+        centro_costo = request.form.get('centro_costo')  # <--- NUEVO DATO
+        rut_inspector = session.get('rut') # Identificamos quién hace la inspección
 
-            # GET: Cargar vehículos para el selector (Consistente con nombres de tablas verificados)
-            cursor.execute("SELECT id, patente, marca, modelo FROM vehiculos_empresa ORDER BY patente")
-            vehiculos = cursor.fetchall()
+        try:
+            # 2. INSERCIÓN EN LA BASE DE DATOS
+            # Asegúrate de haber ejecutado el ALTER TABLE en pgAdmin primero
+            query_insert = """
+                INSERT INTO inspecciones_flota 
+                (vehiculo_id, rut_inspector, kilometraje, estado_vehiculo, observaciones, centro_costo, fecha)
+                VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            """
+            cursor.execute(query_insert, (
+                vehiculo_id, 
+                rut_inspector, 
+                kilometraje, 
+                estado_vehiculo, 
+                observaciones, 
+                centro_costo
+            ))
             
-    except Exception as e:
-        print(f"⚠️ Error en inspección: {e}")
-        flash("Error al procesar la inspección técnica.", "danger")
-    finally:
-        if conexion:
+            conexion.commit()
+            flash("✅ Inspección registrada exitosamente", "success")
+            return redirect(url_for('gestion_flota'))
+
+        except Exception as e:
+            conexion.rollback()
+            flash(f"❌ Error al guardar la inspección: {e}", "danger")
+        finally:
+            cursor.close()
             conexion.close()
-            
-    return render_template('inspeccion_vehiculo.html', vehiculos=vehiculos)
 
+    # --- LÓGICA PARA CARGAR EL FORMULARIO (GET) ---
+    # Necesitamos enviar los vehículos y los centros de costo al HTML
+    cursor.execute("SELECT id, patente, marca, modelo FROM flota ORDER BY patente") # REVISAR SI APLICA PONER "FLOTA" ACA
+    vehiculos = cursor.fetchall()
+
+    # Obtenemos los centros de costo para que el selector no esté vacío
+    cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal ORDER BY centro_costo")
+    centros_costo = [row[0] for row in cursor.fetchall()]
+
+    cursor.close()
+    conexion.close()
+
+    return render_template('inspeccion_vehiculo.html', 
+                           vehiculos=vehiculos, 
+                           centros_costo=centros_costo)
+    
 #########################################
 @app.route('/anular_reserva/<int:reserva_id>', methods=['POST'])
 def anular_reserva(reserva_id):
@@ -2368,6 +2532,68 @@ def anular_reserva(reserva_id):
             conexion.close()
             
     return redirect(url_for('gestion_flota'))
+
+#################################################################################################
+import pandas as pd
+
+@app.route('/remuneraciones', methods=['GET', 'POST'])
+def remuneraciones():
+    # 1. Verificación de Autenticación: Agregamos 'secretaria' a la lista permitida
+    if 'usuario' not in session or session.get('rol') not in ['admin', 'secretaria']:
+        flash("No tienes permisos para acceder al módulo de Remuneraciones", "danger")
+        return redirect(url_for('login'))
+    #if 'usuario' not in session:
+    #    return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        mes_devengo_str = request.form.get('mes_devengo')
+        archivo = request.files.get('archivo_excel')
+
+        if archivo and mes_devengo_str:
+            try:
+                # Definimos la fecha una sola vez
+                mes_devengo = f"{mes_devengo_str}-01"
+            
+                # Lectura de Excel: Hoja 'LIBRO', Fila 8, Columnas A y AC
+                df = pd.read_excel(archivo, sheet_name='LIBRO', header=7, usecols=[0, 28])
+            
+                # Renombrado forzado para asegurar compatibilidad
+                df.columns = ['rut_excel', 'total_haberes']
+
+                conexion = obtener_conexion()
+                with conexion.cursor() as cursor:
+                    for _, fila in df.iterrows():
+                        # Saltamos filas nulas
+                        if pd.isna(fila['rut_excel']) or pd.isna(fila['total_haberes']):
+                            continue
+
+                        # Limpieza profunda de RUT
+                        rut_limpio = str(fila['rut_excel']).strip().replace('.', '').replace(' ', '')
+                        total_haberes = fila['total_haberes']
+
+                        cursor.execute("""
+                            INSERT INTO remuneraciones_cargadas (rut, total_haberes, mes_devengo, usuario_carga)
+                            VALUES (%s, %s, %s, %s)
+                            ON CONFLICT (rut, mes_devengo) 
+                            DO UPDATE SET total_haberes = EXCLUDED.total_haberes;
+                        """, (rut_limpio, total_haberes, mes_devengo, session.get('usuario')))
+            
+                conexion.commit()
+                flash(f"✅ Remuneraciones de {mes_devengo_str} cargadas con éxito.", "success")
+                # Redirección de éxito
+                return redirect(url_for('remuneraciones'))
+
+            except Exception as e:
+                # Capturamos cualquier error y nos aseguramos de volver al módulo
+                flash(f"❌ Error al procesar el archivo: {str(e)}", "danger")
+                return redirect(url_for('remuneraciones'))
+        
+        else:
+            flash("⚠️ Debe seleccionar un mes y un archivo válido.", "warning")
+            return redirect(url_for('remuneraciones'))
+
+    # Para el método GET, simplemente mostramos la página
+    return render_template('remuneraciones.html')
 
 ######################################################################################################
 @app.route('/logout')

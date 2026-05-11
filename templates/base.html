@@ -196,6 +196,10 @@
             <a href="{{ url_for('resultado_hh') }}" class="{% if request.endpoint == 'resultado_hh' %}nav-active{% endif %}">📈 Resultados HH</a>
         {% endif %}
 
+        {% if session['rol'] in ['admin', 'secretaria'] %}
+            <a href="{{ url_for('remuneraciones') }}" class="{% if request.endpoint == 'remuneraciones' %}nav-active{% endif %}">💰 Remuneraciones</a>
+        {% endif %}
+
         {% if session['rol'] in ['admin', 'jefeT', 'jefeB', 'bodega'] %}
             <a href="{{ url_for('ver_inventario') }}" class="{% if request.endpoint == 'ver_inventario' %}nav-active{% endif %}">📦 Inventario</a>
         {% endif %}

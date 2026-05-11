@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show shadow-sm" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div class="card shadow border-0">
+                <div class="card-header bg-primary text-white text-center">
+                    <h4 class="mb-0">📦 Módulo de Remuneraciones</h4>
+                </div>
+                <div class="card-body p-4">
+                    <form action="{{ url_for('remuneraciones') }}" method="POST" enctype="multipart/form-data">
+                        <!-- <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> El sistema limpiará automáticamente los puntos de los RUT (ej: 12.345.678-9 → 12345678-9).
+                        </div> -->
+                        
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">1. Mes de las Remuneraciones (Seleccione el mes en que se trabajaron las horas):</label>
+                            <input type="month" name="mes_devengo" class="form-control form-control-lg" required>
+                            <!-- <small class="text-muted">Seleccione el mes en que se trabajaron las horas (ej: Marzo).</small> -->
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">2. Seleccionar Archivo Excel:</label>
+                            <input type="file" name="archivo_excel" class="form-control" accept=".xlsx, .xls" required>
+                        </div>
+
+                        <button type="submit" class="btn btn-success btn-lg w-100 shadow">
+                            <i class="fas fa-upload"></i> Cargar y Vincular Datos
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
