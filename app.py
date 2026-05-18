@@ -883,7 +883,23 @@ def control_gastos():
     # ACCIÓN 1: Agregar a la Vista Previa (Temporal)
     if request.method == 'POST' and 'agregar_a_vista_previa' in request.form:
         monto_raw = request.form.get('monto_registro', '').strip()
+        numero_doc = request.form.get('numero_factura', '').strip()
         
+        # --- NUEVA LÓGICA DE ALERTA POR DUPLICIDAD ---
+        if numero_doc:
+            conexion_check = obtener_conexion()
+            try:
+                with conexion_check.cursor() as cursor:
+                    # Buscamos si el número de documento ya existe en registro_costos
+                    cursor.execute("SELECT centro_costo, fecha FROM registro_costos WHERE numero_documento = %s", (numero_doc,))
+                    duplicado = cursor.fetchone()
+                    
+                    if duplicado:
+                        flash(f"⚠️ ALERTA DE DUPLICIDAD: El documento N°{numero_doc} ya fue ingresado previamente (Centro de Costo: {duplicado[0]}, Fecha: {duplicado[1]}).", "warning")
+                        return redirect(url_for('control_gastos'))
+            finally:
+                conexion_check.close()
+        # --- FIN DE LÓGICA DE ALERTA ---
         # Mejora: Validación y conversión a float para evitar errores NaN en Excel
         try:
             monto_valor = float(monto_raw) if monto_raw else 0.0
@@ -967,6 +983,7 @@ def control_gastos():
         mostrar_descarga=True,
         url_descarga="/descargar_excel/gastos"
     )
+
     
 #################################
 @app.route('/eliminar_gasto_temporal/<int:index>')
@@ -1827,6 +1844,27 @@ def resultado_hh():
 #                            regexp_replace(UPPER(rc.rut), '[^0-9K]', '', 'g')
 #                        AND htm.mes_ref = rc.mes_devengo
 #                    )
+
+# Version 8:
+
+# FactorCalculado AS (
+#                        SELECT 
+#                            htm.rut, htm.mes_ref, htm.total_hn_mes,
+#                            rc.total_haberes
+#                        FROM HorasTotalesMensuales htm
+#                        -- Cambiamos INNER JOIN por LEFT JOIN para identificar a quienes no tienen sueldo
+#                        -- pero para el cálculo final, la lógica de unión es la que corregimos:
+#                        INNER JOIN remuneraciones_cargadas rc ON 
+#                            -- NORMALIZACIÓN DEFINITIVA:
+#                            -- 1. regexp_replace elimina todo lo que no sea número (puntos, guiones, espacios, letras)
+#                            -- 2. Al convertir a BIGINT, la base de datos ignora automáticamente los ceros a la izquierda
+#                            --    sin riesgo de borrar ceros que van al final o al medio.
+#                            CAST(NULLIF(regexp_replace(htm.rut, '[^0-9]', '', 'g'), '') AS BIGINT) = 
+#                            CAST(NULLIF(regexp_replace(rc.rut, '[^0-9]', '', 'g'), '') AS BIGINT)
+#                        AND htm.mes_ref = rc.mes_devengo
+#                    )
+
+# Version 9:
                     
             with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
                 query = f"""
@@ -1837,19 +1875,19 @@ def resultado_hh():
                     ),
                     FactorCalculado AS (
                         SELECT 
-                            htm.rut, htm.mes_ref, htm.total_hn_mes,
-                            rc.total_haberes
+                            htm.rut, 
+                            htm.mes_ref, 
+                            htm.total_hn_mes,
+                            -- Cambiamos la selección simple por SUM para consolidar todos los haberes del mes
+                            SUM(rc.total_haberes) as total_haberes
                         FROM HorasTotalesMensuales htm
-                        -- Cambiamos INNER JOIN por LEFT JOIN para identificar a quienes no tienen sueldo
-                        -- pero para el cálculo final, la lógica de unión es la que corregimos:
                         INNER JOIN remuneraciones_cargadas rc ON 
-                            -- NORMALIZACIÓN DEFINITIVA:
-                            -- 1. regexp_replace elimina todo lo que no sea número (puntos, guiones, espacios, letras)
-                            -- 2. Al convertir a BIGINT, la base de datos ignora automáticamente los ceros a la izquierda
-                            --    sin riesgo de borrar ceros que van al final o al medio.
+                            -- Mantenemos tu NORMALIZACIÓN DEFINITIVA para la comparación:
                             CAST(NULLIF(regexp_replace(htm.rut, '[^0-9]', '', 'g'), '') AS BIGINT) = 
                             CAST(NULLIF(regexp_replace(rc.rut, '[^0-9]', '', 'g'), '') AS BIGINT)
                         AND htm.mes_ref = rc.mes_devengo
+                        -- Agregamos GROUP BY para que el sistema sepa cómo agrupar los montos antes de sumar
+                        GROUP BY htm.rut, htm.mes_ref, htm.total_hn_mes
                     )
                     SELECT 
                         p.nombre, p.apellido, p.rut,
