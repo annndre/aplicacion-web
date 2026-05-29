@@ -2108,6 +2108,9 @@ def dashboard():
     # Variables para la nueva mejora de gastos combinados
     gasto_inventario_total = 0
     gasto_personal_total = 0
+    
+    # AJUSTE 1: Inicialización de la variable para el Presupuesto Asignado
+    presupuesto_asignado = 0.0
 
     try:
         with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
@@ -2117,6 +2120,20 @@ def dashboard():
 
             # 3. Lógica para el Administrador
             if rol == 'admin':
+                # AJUSTE 2: Consulta del Presupuesto Asignado según filtro de centro de costo
+                if centro_filtro:
+                    cursor.execute("""
+                        SELECT monto_presupuesto 
+                        FROM presupuesto_proyectos 
+                        WHERE centro_costo = %s
+                    """, (centro_filtro,))
+                    res_presupuesto = cursor.fetchone()
+                    presupuesto_asignado = float(res_presupuesto['monto_presupuesto']) if res_presupuesto else 0.0
+                else:
+                    cursor.execute("SELECT SUM(monto_presupuesto) FROM presupuesto_proyectos")
+                    res_presupuesto = cursor.fetchone()
+                    presupuesto_asignado = float(res_presupuesto[0]) if res_presupuesto and res_presupuesto[0] else 0.0
+
                 # --- MEJORA APLICADA: Gastos por Categoría e Inventario Total ---
                 query_gastos = "SELECT categoria, SUM(monto_registro) as total FROM registro_costos WHERE 1=1"
                 params_gastos = []
@@ -2221,6 +2238,31 @@ def dashboard():
                 resultado_estados = cursor.fetchone()
                 if resultado_estados:
                     estados = dict(resultado_estados)
+                
+                # --- MEJORA APLICADA: Preparación de Datos para el Gráfico Circular Opex ---
+                # Agrupamos los dos grandes pilares del Opex de JCM
+                opex_labels = ['Materiales e Inventario', 'Mano de Obra (HH Reales)']
+                opex_valores = [gasto_inventario_total, gasto_personal_total]
+                
+                # --- MEJORA APLICADA: Evolución Mensual del Gasto (Opex Combinado) ---
+                query_evolucion = """
+                    WITH GastosMensuales AS (
+                        SELECT TO_CHAR(fecha_registro, 'YYYY-MM') as mes, SUM(monto_registro) as total_m
+                        FROM registro_costos
+                        WHERE 1=1
+                        """ + (" AND centro_costo = %s" if centro_filtro else "") + """
+                        GROUP BY TO_CHAR(fecha_registro, 'YYYY-MM')
+                    )
+                    SELECT mes, total_m FROM GastosMensuales ORDER BY mes ASC
+                """
+                
+                params_evo = [centro_filtro] if centro_filtro else []
+                cursor.execute(query_evolucion, params_evo)
+                fechas_gasto = cursor.fetchall()
+                
+                # Formateamos los datos para enviarlos estructurados a Chart.js
+                evolucion_meses = [row['mes'] for row in fechas_gasto]
+                evolucion_montos = [float(row['total_m']) for row in fechas_gasto]
 
     except Exception as e:
         print(f"⚠️ Error en carga de Dashboard: {e}")
@@ -2228,7 +2270,15 @@ def dashboard():
         if conexion:
             conexion.close()
 
-    # 4. Retorno de plantilla con variables sincronizadas (incluyendo las nuevas variables de gastos)
+    # Cálculo de la desviación económica absoluta y relativa
+    desviacion_monto = presupuesto_asignado - (gasto_inventario_total + gasto_personal_total)
+
+    if presupuesto_asignado > 0:
+        porcentaje_ejecutado = ((gasto_inventario_total + gasto_personal_total) / presupuesto_asignado) * 100
+    else:
+        porcentaje_ejecutado = 0.0
+    
+    # 4. Retorno de plantilla con variables sincronizadas (AJUSTE 3: Se añade presupuesto_asignado al retorno)
     return render_template('dashboard.html', 
                             centros=centros, 
                             gastos_cat=datos_gastos, 
@@ -2243,8 +2293,15 @@ def dashboard():
                             rol=rol,
                             total_general=(gasto_inventario_total + gasto_personal_total),
                             gastos_inv=gasto_inventario_total,
-                            gastos_pers=gasto_personal_total)
-                                            
+                            gastos_pers=gasto_personal_total,
+                            presupuesto_asignado=presupuesto_asignado,
+                            desviacion_monto=desviacion_monto,
+                            porcentaje_ejecutado=porcentaje_ejecutado,
+                            opex_labels=opex_labels,
+                            opex_valores=opex_valores,
+                            evolucion_meses=evolucion_meses,
+                            evolucion_montos=evolucion_montos)
+                                                
 #####################################################
 # --- MÓDULO 2: GESTIÓN DE FLOTA (Módulo Nuevo y Autónomo) ---
 

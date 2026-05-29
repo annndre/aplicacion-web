@@ -33,7 +33,6 @@
 
 {% if rol == 'admin' %}
 <div class="kpi-container">
-    <!-- MEJORA: Tarjeta de Gastos Totales Combinada -->
     <div class="kpi-card">
         <h3>Gastos Totales</h3>
         <p class="valor-kpi" style="margin-bottom: 10px;">$ {{ "{:,.0f}".format(total_general or 0) }}</p>
@@ -46,7 +45,6 @@
                 <span class="status-value" style="font-size: 1rem;">$ {{ "{:,.0f}".format(gastos_inv or 0) }}</span>
             </div>
             
-            <!-- Línea divisoria negra en vertical -->
             <div style="width: 1.5px; height: 30px; background-color: #000; margin: 0 5px;"></div>
             
             <div style="flex: 1;">
@@ -57,32 +55,36 @@
     </div>
 
     <div class="kpi-card">
-        <h3>Estado de Elementos</h3>
-        <div class="status-split">
-            <div class="status-column">
-                <span class="status-subtitle">Operativos</span>
-                <span class="status-value">{{ estados.op }} un</span>
+        <h3>Desviación Presupuestaria</h3>
+        
+        <p class="valor-kpi" style="color: {{ '#2e7d32' if desviacion_monto >= 0 else '#c62828' }};">
+            $ {{ "{:,.0f}".format(desviacion_monto)|replace(",", ".") }}
+        </p>
+        
+        <hr style="border: 0.5px solid #eee; margin: 10px 0;">
+
+        <div style="display: flex; justify-content: space-around; align-items: center;">
+            <div style="flex: 1; text-align: center;">
+                <span class="status-subtitle">Estado de Obra</span>
+                <span class="status-value" style="font-size: 1rem; color: {{ '#2e7d32' if desviacion_monto >= 0 else '#c62828' }};">
+                    {{ 'Holgura ✔️' if desviacion_monto >= 0 else 'Sobrecosto ⚠️' }}
+                </span>
             </div>
             
-            <div class="status-divider"></div>
+            <div style="width: 1.5px; height: 30px; background-color: #000; margin: 0 5px;"></div>
             
-            <div class="status-column">
-                <span class="status-subtitle">Deficientes</span>
-                <span class="status-value">{{ estados.def }} un</span>
-            </div>
-            
-            <div class="status-divider"></div>
-            
-            <div class="status-column">
-                <span class="status-subtitle">No Operativos</span>
-                <span class="status-value">{{ estados.no_op }} un</span>
+            <div style="flex: 1; text-align: center;">
+                <span class="status-subtitle">% Utilizado</span>
+                <span class="status-value" style="font-size: 1rem; color: #333;">
+                    {{ "{:,.1f}".format(porcentaje_ejecutado) }}%
+                </span>
             </div>
         </div>
     </div>
 
     <div class="kpi-card border-accent">
-        <h3>Alertas Stock</h3>
-        <p class="valor-kpi">12</p>
+        <h3>Presupuesto Asignado</h3>
+        <p class="valor-kpi">$ {{ "{:,.0f}".format(presupuesto_asignado or 0).replace(",", ".") }}</p>
     </div>
 </div>
 
@@ -95,7 +97,7 @@
     </div>
 
     <div class="chart-card">
-        <h4>Estado de Stock: Top 5 Categorías</h4>
+        <h4>Composición del Gasto Opex</h4>
         <div class="canvas-container-pie">
             <canvas id="inventoryChart"></canvas>
         </div>
@@ -104,9 +106,9 @@
 
 <div class="dashboard-grid" style="grid-template-columns: 1fr; margin-top: 25px;">
     <div class="chart-card">
-        <h4>Monto Estimado de Productos Consumidos</h4>
-        <div style="height: 450px; position: relative;">
-            <canvas id="horizontalBarChart"></canvas>
+        <h4>Curva de Evolución Mensual del Gasto Operativo</h4>
+        <div style="height: 400px; position: relative;">
+            <canvas id="evolucionGastoChart"></canvas>
         </div>
     </div>
 </div>
@@ -180,46 +182,78 @@
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
     });
 
+    // NUEVO GRÁFICO CIRCULAR: COMPOSICIÓN OPEX
     new Chart(document.getElementById('inventoryChart'), {
         type: 'doughnut',
         data: {
-            labels: ['EPP', 'INSUMO', 'HERR. MANUAL', 'OFICINA', 'HERR. ELÉCTRICA'],
+            // Pasamos de forma segura las listas desde Flask
+            labels: {{ opex_labels | tojson | safe }},
             datasets: [{
-                data: [300, 150, 100, 80, 50],
-                backgroundColor: ['#D45D00', '#3498db', '#2ecc71', '#9b59b6', '#34495e']
+                data: {{ opex_valores | tojson | safe }},
+                backgroundColor: ['#3498db', '#D45D00'], // Azul para materiales, Naranja corporativo para HH
+                borderWidth: 2
             }]
         },
-        options: { cutout: '65%', responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }
+        options: {
+            cutout: '65%', 
+            responsive: true, 
+            maintainAspectRatio: false,
+            plugins: { 
+                legend: { 
+                    position: 'bottom', 
+                    labels: { 
+                        boxWidth: 12, 
+                        font: { size: 11, weight: 'bold' } 
+                    } 
+                },
+                tooltip: {
+                    callbacks: {
+                        // Formateamos el cartel emergente para mostrarlo en pesos chilenos
+                        label: function(context) {
+                            let value = context.raw;
+                            return context.label + ': $' + value.toLocaleString('es-CL', { minimumFractionDigits: 0 });
+                        }
+                    }
+                }
+            } 
+        }
     });
 
     const datosConsumo = {{ consumos_centro | tojson | safe if consumos_centro else '[]' }};
     
-    new Chart(document.getElementById('horizontalBarChart'), {
-        type: 'bar',
+    // NUEVO GRÁFICO DE LÍNEAS: EVOLUCIÓN TEMPORAL
+    new Chart(document.getElementById('evolucionGastoChart'), {
+        type: 'line',
         data: {
-            labels: datosConsumo.map(item => item.producto_nombre), 
+            labels: {{ evolucion_meses | tojson | safe if evolucion_meses else '[]' }},
             datasets: [{
-                label: 'Monto Consumido $',
-                data: datosConsumo.map(item => item.total),
-                backgroundColor: '#D45D00',
-                borderRadius: 4
+                label: 'Gasto Real Mensual ($)',
+                data: {{ evolucion_montos | tojson | safe if evolucion_montos else '[]' }},
+                borderColor: '#D45D00', // Naranja JCM
+                backgroundColor: 'rgba(212, 93, 0, 0.1)',
+                fill: true,
+                tension: 0.3,
+                borderWidth: 3,
+                pointRadius: 5,
+                pointBackgroundColor: '#2c3e50'
             }]
         },
         options: {
-            indexAxis: 'y', 
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: false },
+                legend: { display: true, position: 'top' },
                 tooltip: {
                     callbacks: {
-                        label: function(context) { return 'Total: $' + context.raw.toLocaleString(); }
+                        label: function(context) { return 'Costo: $' + context.raw.toLocaleString('es-CL'); }
                     }
                 }
             },
             scales: {
-                x: { beginAtZero: true, ticks: { callback: function(value) { return '$' + value.toLocaleString(); } } },
-                y: { ticks: { autoSkip: false, font: { size: 10 }, color: '#333' } }
+                y: {
+                    beginAtZero: true,
+                    ticks: { callback: function(value) { return '$' + value.toLocaleString('es-CL'); } }
+                }
             }
         }
     });
