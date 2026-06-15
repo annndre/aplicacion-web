@@ -1208,6 +1208,10 @@ def eliminar_personal(rut):
     return redirect(url_for('asignar_personal'))
 
 ##################################################################################################################
+from datetime import datetime, timedelta
+import psycopg2.extras
+from flask import render_template, request, session, flash, redirect, url_for
+
 @app.route('/registro_horas', methods=['GET', 'POST'])
 def registro_horas():
     # 1. Verificación de Autenticación
@@ -1226,6 +1230,7 @@ def registro_horas():
     rol_usuario = session.get('rol')
     especialidad_jefe = session.get('especialidad_a_cargo')
 
+    # Inicialización de variables de contexto y filtros
     trabajadores = []
     semana_actual = ''
     centro_costo_actual = ''
@@ -1233,47 +1238,64 @@ def registro_horas():
     resumen = {}
     valores_guardados = {}
     centros_costo = []
+    especialidad_actual = ''
+    especialidades_disponibles = []
 
     # --- CARGA DE CENTROS DE COSTO SEGÚN ROL ---
-    with conexion.cursor() as cursor:
-        if rol_usuario == 'admin':
-            cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal ORDER BY centro_costo")
-        else:
-            cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal WHERE rut = %s ORDER BY centro_costo", (rut_usuario,))
-        centros_costo = [row[0] for row in cursor.fetchall()]
-
-    if request.method == 'POST':
-        if 'guardar_semana' in request.form:
-            semana = request.form.get('semana', '').strip()
-            centro_costo = request.form.get('centro_costo', '').strip()
-            dia_a_guardar = request.form.get('dia_a_guardar', '').strip().lower()
-
-            # --- DETERMINAR DÍAS A PROCESAR (INDIVIDUAL O SEMANAL) ---
-            if dia_a_guardar == 'todo':
-                lista_dias_proceso = ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'dom']
+    try:
+        with conexion.cursor() as cursor:
+            if rol_usuario == 'admin':
+                cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal ORDER BY centro_costo")
             else:
-                lista_dias_proceso = [dia_a_guardar]
+                cursor.execute("SELECT DISTINCT centro_costo FROM asignacion_personal WHERE rut = %s ORDER BY centro_costo", (rut_usuario,))
+            centros_costo = [row[0] for row in cursor.fetchall()]
+    except Exception as e:
+        conexion.rollback()
+        flash(f"⚠️ Error al cargar los centros de costo: {e}", "danger")
 
-            if semana:
-                year, week = semana.split('-W')
-                primer_dia = datetime.fromisocalendar(int(year), int(week), 1)
-                dias_labels = ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'dom']
-                for i, d in enumerate(dias_labels):
-                    fechas_por_dia[d] = (primer_dia + timedelta(days=i)).strftime('%Y-%m-%d')
+    # --- PROCESAMIENTO DE ACCIONES (POST: GUARDAR SEMANA COMPLETA O DÍA) ---
+    if request.method == 'POST' and 'guardar_semana' in request.form:
+        semana = request.form.get('semana', '').strip()
+        centro_costo = request.form.get('centro_costo', '').strip()
+        dia_a_guardar = request.form.get('dia_a_guardar', '').strip().lower()
+        especialidad_actual = request.form.get('especialidad', '').strip()
 
-            mensaje_mostrado = False
+        if dia_a_guardar == 'todo':
+            lista_dias_proceso = ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'dom']
+        else:
+            lista_dias_proceso = [dia_a_guardar]
+
+        if semana:
+            year, week = semana.split('-W')
+            primer_dia = datetime.fromisocalendar(int(year), int(week), 1)
+            dias_labels = ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'dom']
+            for i, d in enumerate(dias_labels):
+                fechas_por_dia[d] = (primer_dia + timedelta(days=i)).strftime('%Y-%m-%d')
+
+        mensaje_mostrado = False
+        try:
             with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                # Obtener el personal asignado al centro de costo
-                cursor.execute("SELECT rut, nombre, apellido FROM asignacion_personal WHERE centro_costo = %s", (centro_costo,))
+                # CORRECCIÓN EN GUARDADO: Filtrado por especialidad cruzando con la tabla 'personal'
+                query_personas = """
+                    SELECT ap.rut, ap.nombre, ap.apellido 
+                    FROM asignacion_personal ap
+                    JOIN personal p ON ap.rut = p.rut
+                    WHERE ap.centro_costo = %s
+                """
+                params_personas = [centro_costo]
+                
+                if len(especialidad_actual) > 0:
+                    query_personas += " AND p.especialidad = %s"
+                    params_personas.append(especialidad_actual)
+                    
+                cursor.execute(query_personas, params_personas)
                 personas = cursor.fetchall()
 
-                # BUCLE 1: Recorrer los días (ej: Solo lunes o de Lunes a Domingo)
                 for d_key in lista_dias_proceso:
                     fecha_real = fechas_por_dia.get(d_key)
                     if not fecha_real:
                         continue
                     
-                    # BUCLE 2: Recorrer cada trabajador para el día actual del bucle
                     for persona in personas:
                         rut = persona['rut'].strip()
                         nombre = persona['nombre'].strip()
@@ -1291,7 +1313,6 @@ def registro_horas():
                         observacionP = None
 
                         try:
-                            # Manejo de estados y horas normales
                             if hn_val in ['L', 'V', 'F', 'P', 'D']:
                                 horas_normales = 0
                                 observacion = hn_val
@@ -1315,13 +1336,13 @@ def registro_horas():
                             total_previas = cursor.fetchone()[0] or 0
 
                             if (float(total_previas) + horas_normales) > 9.0:
-                                flash(f"🚨 BLOQUEO: {nombre} {apellido} ya registra {total_previas}h en otros centros para el día {d_key}.", "danger")
+                                flash(f"🚨 BLOQUEO: {nombre} {apellido} ya registra {total_previas}h en otros centros.", "danger")
                                 continue 
 
                             horas_extras = int(he_val) if he_val != '' else 0
                             dias_trabajados = 1 if observacion == 'V' else round(horas_normales / 9, 1) if horas_normales else 0
 
-                            # Guardado o Actualización (Upsert)
+                            # Control de persistencia mediante Upsert
                             cursor.execute("SELECT 1 FROM registro_horas WHERE horas_fecha = %s AND centro_costo = %s AND rut = %s", (fecha_real, centro_costo, rut))
                             if cursor.fetchone():
                                 cursor.execute("""
@@ -1344,68 +1365,116 @@ def registro_horas():
                             continue
 
             conexion.commit()
-            return redirect(url_for('registro_horas'))
+            return redirect(url_for('registro_horas', centro_costo=centro_costo, semana=semana, especialidad=especialidad_actual))
+        except Exception as e:
+            conexion.rollback()
+            flash(f"⚠️ Error al guardar los registros: {e}", "danger")
 
-        else:
-            # --- LÓGICA DE VISUALIZACIÓN (GET / Cambio de Filtros) ---
-            centro_costo_actual = request.form.get('centro_costo', '').strip()
-            semana_actual = request.form.get('semana', '').strip()
+    # --- LÓGICA DE VISUALIZACIÓN (SOPORTA TANTO GET COMO PETICIONES POST DE FILTROS) ---
+    if request.method == 'POST':
+        centro_costo_actual = request.form.get('centro_costo', '').strip()
+        semana_actual = request.form.get('semana', '').strip()
+        especialidad_actual = request.form.get('especialidad', '').strip()
+    else:
+        centro_costo_actual = request.args.get('centro_costo', '').strip()
+        semana_actual = request.args.get('semana', '').strip()
+        especialidad_actual = request.args.get('especialidad', '').strip()
 
-            if semana_actual and centro_costo_actual:
-                try:
-                    year, week = semana_actual.split('-W')
-                    primer_dia = datetime.fromisocalendar(int(year), int(week), 1).date()
-                    domingo = primer_dia + timedelta(days=6)
-
-                    dias_lista = ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'Dom']
-                    for i, d in enumerate(dias_lista):
-                        fechas_por_dia[d] = (primer_dia + timedelta(days=i)).strftime('%Y-%m-%d')
-
-                    with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                        cursor.execute("SELECT nombre, apellido, rut FROM asignacion_personal WHERE centro_costo = %s ORDER BY nombre ASC", (centro_costo_actual,))
-                        trabajadores = cursor.fetchall()
-
-                        cursor.execute("""
-                            SELECT rut, horas_fecha, horas_normales, horas_extras, observacion
-                            FROM registro_horas
-                            WHERE centro_costo = %s AND horas_fecha BETWEEN %s AND %s
-                        """, (centro_costo_actual, primer_dia, domingo))
-                        registros = cursor.fetchall()
-
-                        for r in registros:
-                            rut, fecha, hn, he, obs = r['rut'], r['horas_fecha'], r['horas_normales'], r['horas_extras'], r['observacion']
-                            for k, fecha_str in fechas_por_dia.items():
-                                if fecha.strftime('%Y-%m-%d') == fecha_str:
-                                    valores_guardados.setdefault(rut, {})[k] = {'hn': hn, 'he': he, 'observacion': obs}
-
-                except Exception as e:
-                    flash(f"⚠️ Error al procesar la vista: {e}", "danger")
-
-    # Selección por defecto de centro de costo
+    # Selección por defecto del primer centro de costo disponible
     if not centro_costo_actual and centros_costo:
         centro_costo_actual = centros_costo[0]
 
-    # Carga de Resumen del Centro
+    # CORRECCIÓN EN LA CARGA DEL SELECTOR: Traer especialidades presentes vinculando con la tabla 'personal'
     if centro_costo_actual:
-        with conexion.cursor() as cursor:
-            cursor.execute("""
-                SELECT MAX(horas_fecha) AS ultima_fecha,
-                       SUM(COALESCE(horas_normales, 0) + COALESCE(horas_extras, 0)) AS total_horas
-                FROM registro_horas
-                WHERE centro_costo = %s AND horas_fecha <= CURRENT_DATE
-            """, (centro_costo_actual,))
-            fila = cursor.fetchone()
-            resumen = {'ultima_fecha': fila[0], 'total_horas': fila[1] if fila[1] else 0}
+        try:
+            with conexion.cursor() as cursor:
+                cursor.execute("""
+                    SELECT DISTINCT p.especialidad 
+                    FROM asignacion_personal ap
+                    JOIN personal p ON ap.rut = p.rut
+                    WHERE ap.centro_costo = %s 
+                      AND p.especialidad IS NOT NULL 
+                      AND p.especialidad != '' 
+                    ORDER BY p.especialidad ASC
+                """, (centro_costo_actual,))
+                especialidades_disponibles = [row[0] for row in cursor.fetchall()]
+        except Exception as e:
+            conexion.rollback()
+            flash(f"⚠️ Error al cargar especialidades: {e}", "danger")
 
+    # Carga de la nómina filtrada y de la matriz semanal de horas
+    if semana_actual and centro_costo_actual:
+        try:
+            year, week = semana_actual.split('-W')
+            primer_dia = datetime.fromisocalendar(int(year), int(week), 1).date()
+            domingo = primer_dia + timedelta(days=6)
+
+            dias_lista = ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'Dom']
+            for i, d in enumerate(dias_lista):
+                fechas_por_dia[d] = (primer_dia + timedelta(days=i)).strftime('%Y-%m-%d')
+
+            with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                # CORRECCIÓN EN TABLA: Traer personal cruzando con 'personal' para filtrar por especialidad
+                query_trabajadores = """
+                    SELECT ap.nombre, ap.apellido, ap.rut 
+                    FROM asignacion_personal ap
+                    JOIN personal p ON ap.rut = p.rut
+                    WHERE ap.centro_costo = %s
+                """
+                params_trabajadores = [centro_costo_actual]
+                
+                if len(especialidad_actual) > 0:
+                    query_trabajadores += " AND p.especialidad = %s"
+                    params_trabajadores.append(especialidad_actual)
+                    
+                query_trabajadores += " ORDER BY ap.nombre ASC"
+                cursor.execute(query_trabajadores, params_trabajadores)
+                trabajadores = cursor.fetchall()
+
+                # Carga de la matriz de horas existentes
+                cursor.execute("""
+                    SELECT rut, horas_fecha, horas_normales, horas_extras, observacion
+                    FROM registro_horas
+                    WHERE centro_costo = %s AND horas_fecha BETWEEN %s AND %s
+                """, (centro_costo_actual, primer_dia, domingo))
+                registros = cursor.fetchall()
+
+                for r in registros:
+                    rut, fecha, hn, he, obs = r['rut'], r['horas_fecha'], r['horas_normales'], r['horas_extras'], r['observacion']
+                    for k, fecha_str in fechas_por_dia.items():
+                        if fecha.strftime('%Y-%m-%d') == fecha_str:
+                            valores_guardados.setdefault(rut, {})[k] = {'hn': hn, 'he': he, 'observacion': obs}
+        except Exception as e:
+            conexion.rollback()
+            flash(f"⚠️ Error al procesar la lista de trabajadores: {e}", "danger")
+
+    # Carga del bloque informativo de Resumen Acumulado
+    if centro_costo_actual:
+        try:
+            with conexion.cursor() as cursor:
+                cursor.execute("""
+                    SELECT MAX(horas_fecha) AS ultima_fecha,
+                           SUM(COALESCE(horas_normales, 0) + COALESCE(horas_extras, 0)) AS total_horas
+                    FROM registro_horas
+                    WHERE centro_costo = %s AND horas_fecha <= CURRENT_DATE
+                """, (centro_costo_actual,))
+                fila = cursor.fetchone()
+                resumen = {'ultima_fecha': fila[0], 'total_horas': fila[1] if fila[1] else 0}
+        except Exception as e:
+            conexion.rollback()
+
+    # --- RETORNO SEGURO DE VARIABLES A LA PLANTILLA JINJA ---
     return render_template("registro_horas.html",
-                            trabajadores=trabajadores,
-                            semana=semana_actual,
-                            centro_costo=centro_costo_actual,
-                            centros_costo=centros_costo,
-                            fechas_por_dia=fechas_por_dia,
-                            resumen=resumen,
-                            valores_guardados=valores_guardados)
-    
+                           trabajadores=trabajadores,
+                           semana=semana_actual,
+                           centro_costo=centro_costo_actual,
+                           centros_costo=centros_costo,
+                           fechas_por_dia=fechas_por_dia,
+                           resumen=resumen,
+                           valores_guardados=valores_guardados,
+                           especialidad_sel=especialidad_actual,
+                           especialidades=especialidades_disponibles)
+        
 #########################################################################################
 @app.route('/exportar_trabajador', methods=['POST'])
 def exportar_trabajador():

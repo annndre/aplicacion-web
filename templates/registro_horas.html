@@ -49,8 +49,8 @@
         <label for="centro_costo_export" style="margin-bottom: 0;">Exportar HH:</label>
         <select name="centro_costo" id="centro_costo_export" class="form-select form-select-sm" required style="width: 200px;">
             <option value="" disabled selected>Selecciona un centro de costo</option>
-            {% for centro in centros_costo %}
-                <option value="{{ centro }}">{{ centro }}</option>
+          {% for centro in centros_costo %}
+              <option value="{{ centro }}">{{ centro }}</option>
             {% endfor %}
         </select>
         <button type="submit" class="btn btn-success btn-sm">📅 Descargar Excel</button>
@@ -58,20 +58,30 @@
 </div>
 
 <form method="POST" class="form-section">
-    <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
+    <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 20px;">
         <div>
-            <label for="centro_costo">Centro de Costo:</label><br>
-            <select name="centro_costo" id="centro_costo" onchange="this.form.submit()" required style="width: 200px;">
-                <option value="">Selecciona uno</option>
-                {% for centro in centros_costo %}
-                    <option value="{{ centro }}" {% if centro == centro_costo %}selected{% endif %}>{{ centro }}</option>
-                {% endfor %}
-            </select>
+          <label for="centro_costo">Centro de Costo:</label><br>
+          <select name="centro_costo" id="centro_costo" onchange="this.form.submit()" required style="width: 200px; padding: 4px; border-radius: 3px; border: 1px solid #ccc;">
+              <option value="">Selecciona uno</option>
+              {% for centro in centros_costo %}
+                  <option value="{{ centro }}" {% if centro == centro_costo %}selected{% endif %}>{{ centro }}</option>
+              {% endfor %}
+          </select>
         </div>
 
         <div>
             <label for="semana">Semana:</label><br>
-            <input type="week" id="semana" name="semana" value="{{ semana }}" onchange="this.form.submit()" required style="width: 200px;">
+            <input type="week" id="semana" name="semana" value="{{ semana }}" onchange="this.form.submit()" required style="width: 200px; padding: 3px; border-radius: 3px; border: 1px solid #ccc;">
+        </div>
+
+        <div>
+            <label for="especialidad">Especialidad:</label><br>
+            <select name="especialidad" id="especialidad" onchange="this.form.submit()" style="width: 200px; padding: 4px; border-radius: 3px; border: 1px solid #ccc;">
+                <option value="">-- Todas las Especialidades --</option>
+                {% for esp in especialidades %}
+                    <option value="{{ esp }}" {% if esp == specialty_sel or esp == especialidad_sel %}selected{% endif %}>{{ esp }}</option>
+                {% endfor %}
+            </select>
         </div>
     </div>
 </form>
@@ -80,94 +90,97 @@
 <form method="POST">
     <input type="hidden" name="centro_costo" value="{{ centro_costo }}">
     <input type="hidden" name="semana" value="{{ semana }}">
+    <input type="hidden" name="especialidad" value="{{ especialidad_sel }}">
     <input type="hidden" name="guardar_semana" value="1">
     <input type="hidden" name="dia_a_guardar" id="dia_a_guardar">
 
     <div class="d-flex justify-content-center mb-3">
-    <button type="submit" class="btn btn-warning btn-lg shadow" style="font-weight: bold; width: 60%;" onclick="return prepararEnvioSemanal()">
-        🚀 GUARDAR SEMANA COMPLETA (Lunes a Domingo)
-    </button>
+        <button type="submit" class="btn btn-warning btn-lg shadow" style="font-weight: bold; width: 60%;" onclick="return prepararEnvioSemanal()">
+            🚀 GUARDAR SEMANA COMPLETA (Lunes a Domingo)
+        </button>
     </div> 
 
     <div class="table-responsive mt-4">
         <table class="table table-bordered">
             <thead class="table-light">
-                <tr>
-                    <th>Nombre Trabajador</th>
-                    {% for dia_key, nombre in [('lun', 'Lunes'), ('mar', 'Martes'), ('mie', 'Miércoles'), ('jue', 'Jueves'), ('vie', 'Viernes'), ('Sab', 'Sábado'), ('Dom', 'Domingo')] %}
-                    <th>
-                        {{ nombre }}<br>
-                        <span class="text-muted small">{{ fechas_por_dia[dia_key]|default('') }}</span><br>
-                        <input type="number" min="0" max="24" step="0.1" placeholder="Rellenar día" oninput="rellenarDia('{{ dia_key }}', this.value)" style="width: 100%;">
-                    </th>
-                    {% endfor %}
-                </tr>
+              <tr>
+                  <th>Nombre Trabajador</th>
+                  {% for dia_key, nombre in [('lun', 'Lunes'), ('mar', 'Martes'), ('mie', 'Miércoles'), ('jue', 'Jueves'), ('vie', 'Viernes'), ('Sab', 'Sábado'), ('Dom', 'Domingo')] %}
+                  <th>
+                      {{ nombre }}<br>
+                      <span class="text-muted small">{{ fechas_por_dia[dia_key]|default('') }}</span><br>
+                      <input type="number" min="0" max="24" step="0.1" placeholder="Rellenar día" oninput="rellenarDia('{{ dia_key }}', this.value)" style="width: 100%;">
+                  </th>
+                  {% endfor %}
+              </tr>
             </thead>
             <tbody>
-                {% for persona in trabajadores %}
-                <tr>
-                    <td>
-                        <strong>{{ loop.index }}. {{ persona[0] }} {{ persona[1] }}</strong><br>
-                        <span style="font-size: 0.8em; color: #666;">RUT: {{ persona[2] }}</span>
-                    </td>
-                    {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'Dom'] %}
-                    <td>
-                        {% set fecha_dia = fechas_por_dia[dia_key]|default('') %}
-                        {% set rut = persona[2] %}
-                        {% set datos = valores_guardados.get(rut, {}).get(dia_key, {}) %}
-                        <div style="display: flex; flex-direction: column;">
-                            <input type="text"
-                                name="hn_{{ rut }}_{{ dia_key }}"
-                                id="hn_{{ rut }}_{{ dia_key }}"
-                                pattern="^([0-9]{1,2}([.,][0-9])?|[lLvVfFpP dD])?$"
-                                title="Ej: 8, 7.5, 7,5 o L/V/F/P/D"
-                                placeholder="HN o L/V/F/P/D"
-                                class="form-control mb-1 hn_{{ dia_key }} {% if datos %}bloqueado{% endif %}"
-                                value="{% if datos.observacion in ['L', 'P', 'F', 'V', 'D'] %}{{ datos.observacion }}{% elif datos.hn is not none %}{{ datos.hn }}{% endif %}"
-                                oninput="mostrarCamposPermiso(this.value, '{{ rut }}', '{{ dia_key }}')"
-                                {% if datos %}readonly{% endif %}>
+              {% for persona in trabajadores %}
+              <tr>
+                  <td>
+                      <strong>{{ loop.index }}. {{ persona[0] }} {{ persona[1] }}</strong><br>
+                      <span style="font-size: 0.8em; color: #666;">RUT: {{ persona[2] }}</span>
+                  </td>
+                  {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'Dom'] %}
+                  <td>
+                      {% set fecha_dia = fechas_por_dia[dia_key]|default('') %}
+                      {% set rut = persona[2] %}
+                      {% set datos = valores_guardados.get(rut, {}).get(dia_key, {}) %}
+                      
+                      <div style="display: flex; flex-direction: column;">
+                          <input type="text"
+                                 name="hn_{{ rut }}_{{ dia_key }}"
+                                 id="hn_{{ rut }}_{{ dia_key }}"
+                                 pattern="^([0-9]{1,2}([.,][0-9])?|[lLvVfFpP dD])?$"
+                                 title="Ej: 8, 7.5, 7,5 o L/V/F/P/D"
+                                 placeholder="HN o L/V/F/P/D"
+                                 class="form-control mb-1 hn_{{ dia_key }} {% if datos %}bloqueado{% endif %}"
+                                 value="{% if datos.observacion in ['L', 'P', 'F', 'V', 'D'] %}{{ datos.observacion }}{% elif datos.hn is not none %}{{ datos.hn }}{% endif %}"
+                                 oninput="mostrarCamposPermiso(this.value, '{{ rut }}', '{{ dia_key }}')"
+                                 {% if datos %}readonly{% endif %}>
 
-                            <input type="number"
-                                name="he_{{ rut }}_{{ dia_key }}"
-                                min="0" max="24"
-                                placeholder="HE"
-                                class="form-control he_{{ dia_key }} {% if datos %}bloqueado{% endif %}"
-                                value="{{ datos.he if datos else '' }}"
-                                {% if datos %}disabled{% endif %}>
+                          <input type="number"
+                                 name="he_{{ rut }}_{{ dia_key }}"
+                                 id="he_{{ rut }}_{{ dia_key }}"
+                                 min="0" max="24"
+                                 placeholder="HE"
+                                 class="form-control he_{{ dia_key }} {% if datos %}bloqueado{% endif %}"
+                                 value="{{ datos.he if datos else '' }}"
+                                 {% if datos %}disabled{% endif %}>
 
-                            <div id="permiso_{{ rut }}_{{ dia_key }}" style="display: none; margin-top: 5px;">
-                                <select name="tipo_permiso_{{ rut }}_{{ dia_key }}" class="form-select mb-1" style="font-size: 0.85em;">
-                                    <option value="">Tipo de permiso</option>
-                                    <option value="Media jornada">Media jornada</option>
-                                    <option value="Jornada completa">Jornada completa</option>
-                                </select>
-                                <input type="text"
-                                    name="razon_permiso_{{ rut }}_{{ dia_key }}"
-                                    placeholder="Motivo del permiso"
-                                    class="form-control"
-                                    style="font-size: 0.85em;">
-                            </div>
-                        </div>
-                    </td>
-                    {% endfor %}
-                </tr>
-                {% endfor %}
+                          <div id="permiso_{{ rut }}_{{ dia_key }}" style="display: none; margin-top: 5px;">
+                              <select name="tipo_permiso_{{ rut }}_{{ dia_key }}" class="form-select mb-1" style="font-size: 0.85em;">
+                                  <option value="">Tipo de permiso</option>
+                                  <option value="Media jornada">Media jornada</option>
+                                  <option value="Jornada completa">Jornada completa</option>
+                              </select>
+                              <input type="text"
+                                     name="razon_permiso_{{ rut }}_{{ dia_key }}"
+                                     placeholder="Motivo del permiso"
+                                     class="form-control"
+                                     style="font-size: 0.85em;">
+                          </div>
+                      </div>
+                  </td>
+                  {% endfor %}
+              </tr>
+              {% endfor %}
             </tbody>
             <tfoot>
-                <tr>
-                    <td></td>
-                    {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'Dom'] %}
-                    <td style="text-align: center;">
-                        <button type="submit" class="btn btn-primary btn-sm w-100 mt-2" onclick="return setDiaYEnviar('{{ dia_key }}')">
-                            Guardar {{ dia_key|capitalize }}
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="habilitarDia('{{ dia_key }}')">
-                            ✏️ Editar {{ dia_key|capitalize }}
-                        </button>
-                    </td>
-                    {% endfor %}
-                </tr>
-            </tfoot>
+              <tr>
+                  <td></td>
+                  {% for dia_key in ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'Dom'] %}
+                  <td style="text-align: center;">
+                      <button type="submit" class="btn btn-primary btn-sm w-100 mt-2" onclick="return setDiaYEnviar('{{ dia_key }}')">
+                          Guardar {{ dia_key|capitalize }}
+                      </button>
+                      <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="habilitarDia('{{ dia_key }}')">
+                          ✏️ Editar {{ dia_key|capitalize }}
+                      </button>
+                  </td>
+                  {% endfor %}
+              </tr>
+            </footer>
         </table>
     </div>
 </form>
@@ -176,22 +189,19 @@
 {% if centro_costo and resumen %}
 <div class="card mt-4 p-3 border-info" style="background-color: #f0f8ff;">
     <h5>📊 Resumen del Centro de Costo: {{ centro_costo }}</h5>
-    {% if resumen.ultima_fecha %}
-        <p><strong>Última fecha con registro de horas:</strong> {{ resumen.ultima_fecha.strftime('%d-%m-%Y') }}</p>
-        <p><strong>Total acumulado (HN + HE):</strong> {{ resumen.total_horas }} horas</p>
-    {% else %}
-        <p>No hay registros aún para este centro de costo.</p>
-    {% endif %}
+  {% if resumen.ultima_fecha %}
+      <p><strong>Última fecha con registro de horas:</strong> {{ resumen.ultima_fecha.strftime('%d-%m-%Y') }}</p>
+      <p><strong>Total acumulado (HN + HE):</strong> {{ resumen.total_horas }} horas</p>
+  {% else %}
+      <p>No hay registros aún para este centro de costo.</p>
+  {% endif %}
 </div>
 {% endif %}
 
 <script>
 function prepararEnvioSemanal() {
     if (confirm("¿Deseas guardar todos los registros ingresados de la semana?")) {
-        // 1. Marcamos el valor especial para Python
         document.getElementById("dia_a_guardar").value = "todo";
-        
-        // 2. Habilitamos todos los inputs para que viajen en el POST
         document.querySelectorAll('input.form-control').forEach(input => {
             input.removeAttribute('readonly');
             input.removeAttribute('disabled');
@@ -209,38 +219,36 @@ function rellenarDia(dia, valor) {
 }
 
 function setDiaYEnviar(dia) {
-    document.getElementById("dia_a_guardar").value = dia;
-    return true;
+  document.getElementById("dia_a_guardar").value = dia;
+  return true;
 }
 
 function mostrarCamposPermiso(valor, rut, dia) {
-    const contenedor = document.getElementById(`permiso_${rut}_${dia}`);
-    if (valor.toUpperCase() === 'P') {
-        contenedor.style.display = 'block';
+  const contenedor = document.getElementById(`permiso_${rut}_${dia}`);
+  if (valor.toUpperCase() === 'P') {
+      contenedor.style.display = 'block';
     } else {
         contenedor.style.display = 'none';
     }
 }
 
 function habilitarDia(dia) {
-    // Bloquea todos los días primero
-    ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'Dom'].forEach(d => {
-        document.querySelectorAll('.hn_' + d).forEach(i => {
+  ['lun', 'mar', 'mie', 'jue', 'vie', 'Sab', 'Dom'].forEach(d => {
+      document.querySelectorAll('.hn_' + d).forEach(i => {
             i.setAttribute('readonly', true);
             i.classList.add('bloqueado');
         });
-        document.querySelectorAll('.he_' + d).forEach(i => {
+      document.querySelectorAll('.he_' + d).forEach(i => {
             i.setAttribute('disabled', true);
             i.classList.add('bloqueado');
         });
-    });
+  });
 
-    // Habilita solo el día seleccionado
-    document.querySelectorAll('.hn_' + dia).forEach(input => {
-        input.removeAttribute('readonly');
-        input.classList.remove('bloqueado');
-    });
-    document.querySelectorAll('.he_' + dia).forEach(input => {
+  document.querySelectorAll('.hn_' + dia).forEach(input => {
+      input.removeAttribute('readonly');
+      input.classList.remove('bloqueado');
+  });
+  document.querySelectorAll('.he_' + dia).forEach(input => {
         input.removeAttribute('disabled');
         input.classList.remove('bloqueado');
     });
