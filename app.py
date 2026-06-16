@@ -1272,6 +1272,20 @@ def registro_horas():
             for i, d in enumerate(dias_labels):
                 fechas_por_dia[d] = (primer_dia + timedelta(days=i)).strftime('%Y-%m-%d')
 
+            # --- CONTROL CRÍTICO: BLOQUEO DE REGISTROS CON MÁS DE 2 SEMANAS DE ANTIGÜEDAD ---
+            # Calculamos el lunes de la semana actual del servidor
+            hoy = datetime.now()
+            año_actual, sem_actual, _ = hoy.isocalendar()
+            lunes_semana_actual = datetime.fromisocalendar(año_actual, sem_actual, 1)
+            
+            # Restamos 2 semanas (14 días) para obtener el límite inferior permitido (Lunes de hace 2 semanas)
+            lunes_limite_pasado = lunes_semana_actual - timedelta(weeks=2)
+
+            # Si el primer día de la semana seleccionada es anterior al límite permitido, bloqueamos el proceso
+            if primer_dia.date() < lunes_limite_pasado.date():
+                flash("🚨 BLOQUEO: No está permitido ingresar ni modificar registros de HH con más de 2 semanas de antigüedad.", "danger")
+                return redirect(url_for('registro_horas'))
+
         mensaje_mostrado = False
         try:
             with conexion.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
@@ -1325,6 +1339,11 @@ def registro_horas():
                             else:
                                 horas_normales = round(float(hn_val.replace(',', '.')), 1)
                                 if horas_normales < 0 or horas_normales > 24:
+                                    continue
+                                    
+                                # RESTRECCIÓN JORNADA 42H: Máximo 6 horas normales los días viernes
+                                if d_key == 'vie' and horas_normales > 6.0:
+                                    flash(f"🚨 error: El día viernes no puede registrar más de 6 horas normales ({nombre} {apellido}).", "danger")
                                     continue
 
                             # Control Crítico de 9 HH

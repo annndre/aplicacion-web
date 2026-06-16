@@ -6,7 +6,7 @@
 <h2>Registro de Horas</h2>
 
 <div class="alert alert-info mt-3" role="alert">
-  Se pueden editar los días de la semana actual y las 2 anteriores. Solo un día a la vez.
+  Se pueden editar los días de la semana actual y las 2 anteriores.
 </div>
 
 {% with messages = get_flashed_messages(with_categories=true) %}
@@ -200,6 +200,23 @@
 
 <script>
 function prepararEnvioSemanal() {
+    // Validar que ningún viernes supere las 6 horas antes de confirmar
+    let viernesValidos = true;
+    document.querySelectorAll('.hn_vie').forEach(input => {
+        let valor = parseFloat(input.value.replace(',', '.'));
+        if (!isNaN(valor) && valor > 6) {
+            viernesValidos = false;
+            input.style.border = "2px solid red"; // Pinta el borde de rojo para identificar el error
+        } else {
+            input.style.borderColor = "";
+        }
+    });
+
+    if (!viernesValidos) {
+        alert("🚨 No se puede guardar la semana: Hay registros de días viernes que superan el límite máximo de 6 horas normales (Jornada 42h).");
+        return false;
+    }
+
     if (confirm("¿Deseas guardar todos los registros ingresados de la semana?")) {
         document.getElementById("dia_a_guardar").value = "todo";
         document.querySelectorAll('input.form-control').forEach(input => {
@@ -219,8 +236,24 @@ function rellenarDia(dia, valor) {
 }
 
 function setDiaYEnviar(dia) {
-  document.getElementById("dia_a_guardar").value = dia;
-  return true;
+    if (dia === 'vie') {
+        let viernesValidos = true;
+        document.querySelectorAll('.hn_vie').forEach(input => {
+            let valor = parseFloat(input.value.replace(',', '.'));
+            if (!isNaN(valor) && valor > 6) {
+                viernesValidos = false;
+                input.style.border = "2px solid red";
+            }
+        });
+        
+        if (!viernesValidos) {
+            alert("🚨 Error: No puedes registrar más de 6 horas normales un día viernes.");
+            return false;
+        }
+    }
+
+    document.getElementById("dia_a_guardar").value = dia;
+    return true;
 }
 
 function mostrarCamposPermiso(valor, rut, dia) {
